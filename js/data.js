@@ -1,49 +1,141 @@
 /**
- * 数据管理模块
- * 负责 LocalStorage 的读写和初始化模拟数据
+ * 数据管理模块 (IndexedDB 版)
+ * 负责 IndexedDB 的读写和初始化模拟数据
  */
 
-const STORAGE_KEYS = {
-    USERS: 'cms_users',
-    CLASSES: 'cms_classes',
-    COURSES: 'cms_courses',
-    COURSE_PLANS: 'cms_course_plans',
-    ENROLLMENTS: 'cms_enrollments',
-    SCORES: 'cms_scores',
-    DATA_VERSION: 'cms_data_v5_extreme' // 升级版本号
+const DB_CONFIG = {
+    name: 'CurriculumDesignDB',
+    version: 1,
+    stores: {
+        users: { keyPath: 'id' },
+        classes: { keyPath: 'id' },
+        courses: { keyPath: 'id' },
+        plans: { keyPath: 'id' },
+        scores: { keyPath: 'id' }
+    }
 };
+
+const STORAGE_KEYS = {
+    USERS: 'users',
+    CLASSES: 'classes',
+    COURSES: 'courses',
+    COURSE_PLANS: 'plans',
+    SCORES: 'scores',
+    DATA_VERSION: 'cms_data_v5_extreme_idb' // 升级版本号
+};
+
+class DB {
+    constructor() {
+        this.db = null;
+    }
+
+    async open() {
+        if (this.db) return this.db;
+
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(DB_CONFIG.name, DB_CONFIG.version);
+
+            request.onerror = (event) => {
+                console.error("Database error: " + event.target.errorCode);
+                reject(event.target.error);
+            };
+
+            request.onsuccess = (event) => {
+                this.db = event.target.result;
+                resolve(this.db);
+            };
+
+            request.onupgradeneeded = (event) => {
+                const db = event.target.result;
+                for (const [name, config] of Object.entries(DB_CONFIG.stores)) {
+                    if (!db.objectStoreNames.contains(name)) {
+                        db.createObjectStore(name, config);
+                    }
+                }
+            };
+        });
+    }
+
+    async getAll(storeName) {
+        await this.open();
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([storeName], "readonly");
+            const objectStore = transaction.objectStore(storeName);
+            const request = objectStore.getAll();
+
+            request.onsuccess = (event) => resolve(event.target.result);
+            request.onerror = (event) => reject(event.target.error);
+        });
+    }
+
+    async add(storeName, item) {
+        await this.open();
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([storeName], "readwrite");
+            const objectStore = transaction.objectStore(storeName);
+            const request = objectStore.add(item);
+
+            request.onsuccess = (event) => resolve(event.target.result);
+            request.onerror = (event) => reject(event.target.error);
+        });
+    }
+
+    async put(storeName, item) {
+        await this.open();
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([storeName], "readwrite");
+            const objectStore = transaction.objectStore(storeName);
+            const request = objectStore.put(item);
+
+            request.onsuccess = (event) => resolve(event.target.result);
+            request.onerror = (event) => reject(event.target.error);
+        });
+    }
+
+    async delete(storeName, id) {
+        await this.open();
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([storeName], "readwrite");
+            const objectStore = transaction.objectStore(storeName);
+            const request = objectStore.delete(id);
+
+            request.onsuccess = (event) => resolve(event.target.result);
+            request.onerror = (event) => reject(event.target.error);
+        });
+    }
+    
+    async clear(storeName) {
+        await this.open();
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([storeName], "readwrite");
+            const objectStore = transaction.objectStore(storeName);
+            const request = objectStore.clear();
+
+            request.onsuccess = (event) => resolve();
+            request.onerror = (event) => reject(event.target.error);
+        });
+    }
+}
+
+const db = new DB();
 
 function generateId(prefix = '') {
     return prefix + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
 }
 
-function saveToStorage(key, data) {
-    try {
-        localStorage.setItem(key, JSON.stringify(data));
-    } catch (e) {
-        console.error('Error saving to localStorage', e);
-        alert('存储空间不足或写入失败！');
-    }
-}
-
-function loadFromStorage(key) {
-    const data = localStorage.getItem(key);
-    try {
-        return data ? JSON.parse(data) : null;
-    } catch (e) {
-        console.error('Error parsing data from localStorage', e);
-        return null;
-    }
-}
-
-function initData() {
+async function initData() {
+    // Check if data initialized using localStorage flag (simple way to persist state across reloads)
     if (localStorage.getItem(STORAGE_KEYS.DATA_VERSION) === 'true') {
         return;
     }
 
-    console.log('Initializing EXTREME mock data...');
-    localStorage.clear();
-    localStorage.setItem(STORAGE_KEYS.DATA_VERSION, 'true');
+    console.log('Initializing EXTREME mock data into IndexedDB...');
+    
+    // Clear existing data
+    await db.open();
+    for (const store of Object.keys(DB_CONFIG.stores)) {
+        await db.clear(store);
+    }
 
     // 1. 班级
     const classes = [
@@ -106,37 +198,33 @@ function initData() {
             id: generateId('score_'),
             coursePlanId: planId,
             studentId: studentId,
-            items: { quiz: qz, midterm: mid, final: final },
+            quiz: qz,       // Flattened
+            midterm: mid,   // Flattened
+            final: final,   // Flattened
             total: total,
             status: status
         });
     };
 
     // --- 场景1: 《理论力学》 (王灭绝) - 惨绝人寰 ---
-    // 30个学生，25个挂科，最高分65
     for (let i = 1; i <= 30; i++) {
         const sid = `stu_${i.toString().padStart(3, '0')}`;
         if (i <= 25) {
-            // 挂科大军 (20-58分)
             const score = Math.floor(Math.random() * 39) + 20; 
             addScore('plan_001', sid, score, score + 5, score - 5);
         } else {
-            // 幸存者 (60-65分)
             const score = Math.floor(Math.random() * 6) + 60;
             addScore('plan_001', sid, score, score, score);
         }
     }
 
     // --- 场景2: 《影视鉴赏》 (李慈悲) - 全员通过，大量优秀 ---
-    // 30个学生，28个优秀(>=90)，最低分88
     for (let i = 1; i <= 30; i++) {
         const sid = `stu_${i.toString().padStart(3, '0')}`;
         if (i <= 28) {
-            // 优秀大军 (90-99分)
             const score = Math.floor(Math.random() * 10) + 90;
             addScore('plan_002', sid, score, score - 2, score + 1);
         } else {
-            // 稍微低点 (85-89分)
             const score = Math.floor(Math.random() * 5) + 85;
             addScore('plan_002', sid, score, score, score);
         }
@@ -145,32 +233,32 @@ function initData() {
     // --- 场景3: 《Python编程》 - 正常分布 ---
     for (let i = 1; i <= 30; i++) {
         const sid = `stu_${i.toString().padStart(3, '0')}`;
-        // 正态分布模拟
-        const score = Math.floor(Math.random() * 40) + 55; // 55-95
+        const score = Math.floor(Math.random() * 40) + 55; 
         addScore('plan_003', sid, score, score, score, 'published');
     }
 
     // --- 场景4: 《学术英语》 - 个人波动测试 ---
-    // 张三 (波动王): 期中95 -> 期末40 (作弊被抓?)
     addScore('plan_004', 'stu_001', 40, 95, 90);
-    
-    // 李四 (逆袭王): 期中30 -> 期末85 (开窍了)
     addScore('plan_004', 'stu_002', 85, 30, 40);
-
-    // 其他人正常
     for (let i = 3; i <= 30; i++) {
         const sid = `stu_${i.toString().padStart(3, '0')}`;
         const score = 75 + Math.floor(Math.random() * 10);
         addScore('plan_004', sid, score, score, score);
     }
 
-    saveToStorage(STORAGE_KEYS.CLASSES, classes);
-    saveToStorage(STORAGE_KEYS.USERS, users);
-    saveToStorage(STORAGE_KEYS.COURSES, courses);
-    saveToStorage(STORAGE_KEYS.COURSE_PLANS, coursePlans);
-    saveToStorage(STORAGE_KEYS.SCORES, scores);
+    // 批量写入 IndexedDB
+    const promises = [
+        ...classes.map(i => db.put(STORAGE_KEYS.CLASSES, i)),
+        ...users.map(i => db.put(STORAGE_KEYS.USERS, i)),
+        ...courses.map(i => db.put(STORAGE_KEYS.COURSES, i)),
+        ...coursePlans.map(i => db.put(STORAGE_KEYS.COURSE_PLANS, i)),
+        ...scores.map(i => db.put(STORAGE_KEYS.SCORES, i))
+    ];
 
-    console.log('EXTREME Mock data initialized.');
+    await Promise.all(promises);
+    localStorage.setItem(STORAGE_KEYS.DATA_VERSION, 'true');
+    console.log('EXTREME Mock data initialized in IndexedDB.');
 }
 
+// 自动初始化
 initData();

@@ -1,5 +1,5 @@
 /**
- * 教学管理员端逻辑
+ * 教学管理员端逻辑 (IndexedDB 版)
  */
 
 // 全局变量存储当前数据
@@ -24,23 +24,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // 绑定导航事件
     document.querySelectorAll('.sidebar .nav-link').forEach(link => {
         link.addEventListener('click', (e) => {
-            const targetLink = e.currentTarget; // 使用 currentTarget 获取绑定事件的元素
+            const targetLink = e.currentTarget;
             
             if (targetLink.classList.contains('disabled')) return;
-            
-            // 如果是折叠菜单的触发器，不阻止默认行为（Bootstrap 需要），也不进行页面切换
             if (targetLink.hasAttribute('data-bs-toggle')) return;
 
             e.preventDefault();
             
             const targetId = targetLink.getAttribute('data-target');
-            if (!targetId) return; // 如果没有 data-target，则不处理
+            if (!targetId) return;
 
-            // 切换激活状态
             document.querySelectorAll('.sidebar .nav-link').forEach(l => l.classList.remove('active'));
             targetLink.classList.add('active');
 
-            // 切换内容显示
             document.querySelectorAll('.content-section').forEach(section => {
                 section.style.display = 'none';
             });
@@ -50,7 +46,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 targetSection.style.display = 'block';
             }
 
-            // 重新加载数据
             loadAllData();
         });
     });
@@ -62,20 +57,24 @@ document.addEventListener('DOMContentLoaded', () => {
 /**
  * 加载所有数据并渲染当前视图
  */
-function loadAllData() {
-    currentClasses = loadFromStorage(STORAGE_KEYS.CLASSES) || [];
-    currentCourses = loadFromStorage(STORAGE_KEYS.COURSES) || [];
-    currentPlans = loadFromStorage(STORAGE_KEYS.COURSE_PLANS) || [];
-    currentUsers = loadFromStorage(STORAGE_KEYS.USERS) || [];
-    currentScores = loadFromStorage(STORAGE_KEYS.SCORES) || [];
+async function loadAllData() {
+    try {
+        currentClasses = await db.getAll(STORAGE_KEYS.CLASSES) || [];
+        currentCourses = await db.getAll(STORAGE_KEYS.COURSES) || [];
+        currentPlans = await db.getAll(STORAGE_KEYS.COURSE_PLANS) || [];
+        currentUsers = await db.getAll(STORAGE_KEYS.USERS) || [];
+        currentScores = await db.getAll(STORAGE_KEYS.SCORES) || [];
 
-    renderClasses();
-    renderCourses();
-    renderPlans();
-    renderSchedule();
-    renderScoreAudit();
-    renderStudents();
-    renderTeachers();
+        renderClasses();
+        renderCourses();
+        renderPlans();
+        renderSchedule();
+        renderScoreAudit();
+        renderStudents();
+        renderTeachers();
+    } catch (e) {
+        console.error("Failed to load data from IndexedDB", e);
+    }
 }
 
 // ==========================================
@@ -84,6 +83,7 @@ function loadAllData() {
 
 function renderClasses() {
     const tbody = document.querySelector('#class-table tbody');
+    if (!tbody) return;
     tbody.innerHTML = currentClasses.map(cls => `
         <tr>
             <td>${cls.id}</td>
@@ -100,143 +100,110 @@ function openClassModal(id = null) {
     const form = document.getElementById('classForm');
     form.reset();
     document.getElementById('classId').value = '';
-
+    
     if (id) {
         const cls = currentClasses.find(c => c.id === id);
         if (cls) {
             document.getElementById('classId').value = cls.id;
-            document.getElementById('className').value = cls.name;
+            form.elements['name'].value = cls.name;
+            document.getElementById('classModalLabel').textContent = '编辑班级';
         }
+    } else {
+        document.getElementById('classModalLabel').textContent = '新增班级';
     }
     classModal.show();
 }
 
-function saveClass() {
+async function saveClass() {
+    const form = document.getElementById('classForm');
     const id = document.getElementById('classId').value;
-    const name = document.getElementById('className').value;
+    const name = form.elements['name'].value;
 
     if (!name) return alert('请输入班级名称');
 
-    if (id) {
-        // 更新
-        const index = currentClasses.findIndex(c => c.id === id);
-        if (index !== -1) {
-            currentClasses[index].name = name;
-        }
-    } else {
-        // 新增
-        currentClasses.push({
-            id: generateId('cls_'),
-            name: name
-        });
-    }
+    const cls = {
+        id: id || generateId('cls_'),
+        name: name
+    };
 
-    saveToStorage(STORAGE_KEYS.CLASSES, currentClasses);
+    await db.put(STORAGE_KEYS.CLASSES, cls);
     classModal.hide();
-    renderClasses();
+    loadAllData();
 }
 
-function deleteClass(id) {
-    if (!confirm('确定要删除这个班级吗？')) return;
-    currentClasses = currentClasses.filter(c => c.id !== id);
-    saveToStorage(STORAGE_KEYS.CLASSES, currentClasses);
-    renderClasses();
+async function deleteClass(id) {
+    if (confirm('确定删除该班级吗？')) {
+        await db.delete(STORAGE_KEYS.CLASSES, id);
+        loadAllData();
+    }
 }
 
 // ==========================================
 // 学生管理
 // ==========================================
 
-function renderStudents(filterText = '') {
+function renderStudents() {
     const tbody = document.querySelector('#student-table tbody');
-    let students = currentUsers.filter(u => u.role === 'student');
+    if (!tbody) return;
+    const students = currentUsers.filter(u => u.role === 'student');
     
-    if (filterText) {
-        const lower = filterText.toLowerCase();
-        students = students.filter(s => 
-            s.name.toLowerCase().includes(lower) || 
-            s.username.toLowerCase().includes(lower)
-        );
-    }
+    // 简单的搜索过滤
+    const search = document.getElementById('studentSearch')?.value.toLowerCase() || '';
+    const filtered = students.filter(s => s.name.toLowerCase().includes(search) || s.username.toLowerCase().includes(search));
 
-    tbody.innerHTML = students.map(stu => {
-        const cls = currentClasses.find(c => c.id === stu.classId) || { name: '-' };
-        return `
+    tbody.innerHTML = filtered.map(stu => `
         <tr>
             <td>${stu.username}</td>
             <td>${stu.name}</td>
-            <td>${cls.name}</td>
+            <td>${getClassName(stu.classId)}</td>
             <td>
                 <button class="btn btn-sm btn-outline-primary" onclick="openStudentModal('${stu.id}')">编辑</button>
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteStudent('${stu.id}')">删除</button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteUser('${stu.id}')">删除</button>
             </td>
         </tr>
-    `}).join('');
+    `).join('');
 }
 
 function openStudentModal(id = null) {
     const form = document.getElementById('studentForm');
     form.reset();
     document.getElementById('studentId').value = '';
-
+    
     // 填充班级下拉框
-    const classSelect = document.getElementById('studentClassId');
-    classSelect.innerHTML = '<option value="">请选择班级</option>' + 
-        currentClasses.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    const classSelect = form.elements['classId'];
+    classSelect.innerHTML = currentClasses.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
 
     if (id) {
         const stu = currentUsers.find(u => u.id === id);
         if (stu) {
             document.getElementById('studentId').value = stu.id;
-            document.getElementById('studentUsername').value = stu.username;
-            document.getElementById('studentName').value = stu.name;
-            document.getElementById('studentClassId').value = stu.classId || '';
+            form.elements['username'].value = stu.username;
+            form.elements['name'].value = stu.name;
+            form.elements['classId'].value = stu.classId;
+            document.getElementById('studentModalLabel').textContent = '编辑学生';
         }
+    } else {
+        document.getElementById('studentModalLabel').textContent = '新增学生';
     }
     studentModal.show();
 }
 
-function saveStudent() {
+async function saveStudent() {
+    const form = document.getElementById('studentForm');
     const id = document.getElementById('studentId').value;
-    const username = document.getElementById('studentUsername').value;
-    const name = document.getElementById('studentName').value;
-    const classId = document.getElementById('studentClassId').value;
-
-    if (!username || !name) return alert('请填写完整信息');
-
-    const newStudent = {
-        id: id || generateId('user_'),
-        username,
-        name,
+    
+    const student = {
+        id: id || generateId('stu_'),
+        username: form.elements['username'].value,
+        name: form.elements['name'].value,
+        classId: form.elements['classId'].value,
         role: 'student',
-        classId
+        password: '123' // 默认密码
     };
 
-    if (id) {
-        const index = currentUsers.findIndex(u => u.id === id);
-        if (index !== -1) currentUsers[index] = { ...currentUsers[index], ...newStudent };
-    } else {
-        // 默认密码
-        newStudent.password = '123456';
-        currentUsers.push(newStudent);
-    }
-
-    saveToStorage(STORAGE_KEYS.USERS, currentUsers);
+    await db.put(STORAGE_KEYS.USERS, student);
     studentModal.hide();
-    renderStudents();
-}
-
-function deleteStudent(id) {
-    if (!confirm('确定要删除这个学生吗？')) return;
-    currentUsers = currentUsers.filter(u => u.id !== id);
-    saveToStorage(STORAGE_KEYS.USERS, currentUsers);
-    renderStudents();
-}
-
-function handleSearch(tableId, value) {
-    if (tableId === 'student-table') {
-        renderStudents(value);
-    }
+    loadAllData();
 }
 
 // ==========================================
@@ -245,15 +212,16 @@ function handleSearch(tableId, value) {
 
 function renderTeachers() {
     const tbody = document.querySelector('#teacher-table tbody');
+    if (!tbody) return;
     const teachers = currentUsers.filter(u => u.role === 'teacher');
-
+    
     tbody.innerHTML = teachers.map(t => `
         <tr>
             <td>${t.username}</td>
             <td>${t.name}</td>
             <td>
                 <button class="btn btn-sm btn-outline-primary" onclick="openTeacherModal('${t.id}')">编辑</button>
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteTeacher('${t.id}')">删除</button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteUser('${t.id}')">删除</button>
             </td>
         </tr>
     `).join('');
@@ -263,50 +231,43 @@ function openTeacherModal(id = null) {
     const form = document.getElementById('teacherForm');
     form.reset();
     document.getElementById('teacherId').value = '';
-
+    
     if (id) {
         const t = currentUsers.find(u => u.id === id);
         if (t) {
             document.getElementById('teacherId').value = t.id;
-            document.getElementById('teacherUsername').value = t.username;
-            document.getElementById('teacherName').value = t.name;
+            form.elements['username'].value = t.username;
+            form.elements['name'].value = t.name;
+            document.getElementById('teacherModalLabel').textContent = '编辑教师';
         }
+    } else {
+        document.getElementById('teacherModalLabel').textContent = '新增教师';
     }
     teacherModal.show();
 }
 
-function saveTeacher() {
+async function saveTeacher() {
+    const form = document.getElementById('teacherForm');
     const id = document.getElementById('teacherId').value;
-    const username = document.getElementById('teacherUsername').value;
-    const name = document.getElementById('teacherName').value;
-
-    if (!username || !name) return alert('请填写完整信息');
-
-    const newTeacher = {
-        id: id || generateId('user_'),
-        username,
-        name,
-        role: 'teacher'
+    
+    const teacher = {
+        id: id || generateId('tea_'),
+        username: form.elements['username'].value,
+        name: form.elements['name'].value,
+        role: 'teacher',
+        password: '123'
     };
 
-    if (id) {
-        const index = currentUsers.findIndex(u => u.id === id);
-        if (index !== -1) currentUsers[index] = { ...currentUsers[index], ...newTeacher };
-    } else {
-        newTeacher.password = '123456';
-        currentUsers.push(newTeacher);
-    }
-
-    saveToStorage(STORAGE_KEYS.USERS, currentUsers);
+    await db.put(STORAGE_KEYS.USERS, teacher);
     teacherModal.hide();
-    renderTeachers();
+    loadAllData();
 }
 
-function deleteTeacher(id) {
-    if (!confirm('确定要删除这个教师吗？')) return;
-    currentUsers = currentUsers.filter(u => u.id !== id);
-    saveToStorage(STORAGE_KEYS.USERS, currentUsers);
-    renderTeachers();
+async function deleteUser(id) {
+    if (confirm('确定删除该用户吗？')) {
+        await db.delete(STORAGE_KEYS.USERS, id);
+        loadAllData();
+    }
 }
 
 // ==========================================
@@ -315,15 +276,16 @@ function deleteTeacher(id) {
 
 function renderCourses() {
     const tbody = document.querySelector('#course-table tbody');
-    tbody.innerHTML = currentCourses.map(crs => `
+    if (!tbody) return;
+    tbody.innerHTML = currentCourses.map(c => `
         <tr>
-            <td>${crs.code}</td>
-            <td>${crs.name}</td>
-            <td>${crs.credits}</td>
-            <td>${crs.department}</td>
+            <td>${c.code}</td>
+            <td>${c.name}</td>
+            <td>${c.credits}</td>
+            <td>${c.department}</td>
             <td>
-                <button class="btn btn-sm btn-outline-primary" onclick="openCourseModal('${crs.id}')">编辑</button>
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteCourse('${crs.id}')">删除</button>
+                <button class="btn btn-sm btn-outline-primary" onclick="openCourseModal('${c.id}')">编辑</button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteCourse('${c.id}')">删除</button>
             </td>
         </tr>
     `).join('');
@@ -333,355 +295,264 @@ function openCourseModal(id = null) {
     const form = document.getElementById('courseForm');
     form.reset();
     document.getElementById('courseId').value = '';
-
+    
     if (id) {
-        const crs = currentCourses.find(c => c.id === id);
-        if (crs) {
-            document.getElementById('courseId').value = crs.id;
-            document.getElementById('courseCode').value = crs.code;
-            document.getElementById('courseName').value = crs.name;
-            document.getElementById('courseCredits').value = crs.credits;
-            document.getElementById('courseDept').value = crs.department;
+        const c = currentCourses.find(x => x.id === id);
+        if (c) {
+            document.getElementById('courseId').value = c.id;
+            form.elements['code'].value = c.code;
+            form.elements['name'].value = c.name;
+            form.elements['credits'].value = c.credits;
+            form.elements['department'].value = c.department;
+            document.getElementById('courseModalLabel').textContent = '编辑课程';
         }
+    } else {
+        document.getElementById('courseModalLabel').textContent = '新增课程';
     }
     courseModal.show();
 }
 
-function saveCourse() {
+async function saveCourse() {
+    const form = document.getElementById('courseForm');
     const id = document.getElementById('courseId').value;
-    const code = document.getElementById('courseCode').value;
-    const name = document.getElementById('courseName').value;
-    const credits = document.getElementById('courseCredits').value;
-    const dept = document.getElementById('courseDept').value;
-
-    if (!code || !name) return alert('请填写完整信息');
-
-    const newCourse = {
+    
+    const course = {
         id: id || generateId('crs_'),
-        code,
-        name,
-        credits: parseInt(credits),
-        department: dept
+        code: form.elements['code'].value,
+        name: form.elements['name'].value,
+        credits: parseInt(form.elements['credits'].value),
+        department: form.elements['department'].value
     };
 
-    if (id) {
-        const index = currentCourses.findIndex(c => c.id === id);
-        if (index !== -1) currentCourses[index] = newCourse;
-    } else {
-        currentCourses.push(newCourse);
-    }
-
-    saveToStorage(STORAGE_KEYS.COURSES, currentCourses);
+    await db.put(STORAGE_KEYS.COURSES, course);
     courseModal.hide();
-    renderCourses();
+    loadAllData();
 }
 
-function deleteCourse(id) {
-    if (!confirm('确定要删除这个课程吗？')) return;
-    currentCourses = currentCourses.filter(c => c.id !== id);
-    saveToStorage(STORAGE_KEYS.COURSES, currentCourses);
-    renderCourses();
+async function deleteCourse(id) {
+    if (confirm('确定删除该课程吗？')) {
+        await db.delete(STORAGE_KEYS.COURSES, id);
+        loadAllData();
+    }
 }
 
 // ==========================================
-// 开课计划管理
+// 开课计划
 // ==========================================
 
 function renderPlans() {
     const tbody = document.querySelector('#plan-table tbody');
-    tbody.innerHTML = currentPlans.map(plan => {
-        const course = currentCourses.find(c => c.id === plan.courseId) || { name: '未知课程' };
-        const teacher = currentUsers.find(u => u.id === plan.teacherId) || { name: '未知教师' };
-        
-        return `
+    if (!tbody) return;
+    tbody.innerHTML = currentPlans.map(p => `
         <tr>
-            <td>${course.name}</td>
-            <td>${teacher.name}</td>
-            <td>${plan.semester}</td>
-            <td>${plan.classroom}</td>
-            <td>${plan.timeSlots}</td>
+            <td>${getCourseName(p.courseId)}</td>
+            <td>${getUserName(p.teacherId)}</td>
+            <td>${p.semester}</td>
+            <td>${p.classroom}</td>
+            <td>${p.timeSlots}</td>
             <td>
-                <button class="btn btn-sm btn-outline-primary" onclick="openPlanModal('${plan.id}')">编辑</button>
-                <button class="btn btn-sm btn-outline-danger" onclick="deletePlan('${plan.id}')">删除</button>
+                <button class="btn btn-sm btn-outline-primary" onclick="openPlanModal('${p.id}')">编辑</button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deletePlan('${p.id}')">删除</button>
             </td>
         </tr>
-    `}).join('');
+    `).join('');
 }
 
 function openPlanModal(id = null) {
     const form = document.getElementById('planForm');
     form.reset();
     document.getElementById('planId').value = '';
-
+    
     // 填充下拉框
-    const courseSelect = document.getElementById('planCourseId');
-    courseSelect.innerHTML = '<option value="">请选择课程</option>' + 
-        currentCourses.map(c => `<option value="${c.id}">${c.name} (${c.code})</option>`).join('');
-
-    const teacherSelect = document.getElementById('planTeacherId');
-    const teachers = currentUsers.filter(u => u.role === 'teacher');
-    teacherSelect.innerHTML = '<option value="">请选择教师</option>' + 
-        teachers.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+    form.elements['courseId'].innerHTML = currentCourses.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    form.elements['teacherId'].innerHTML = currentUsers.filter(u => u.role === 'teacher').map(t => `<option value="${t.id}">${t.name}</option>`).join('');
 
     if (id) {
-        const plan = currentPlans.find(p => p.id === id);
-        if (plan) {
-            document.getElementById('planId').value = plan.id;
-            document.getElementById('planCourseId').value = plan.courseId;
-            document.getElementById('planTeacherId').value = plan.teacherId;
-            document.getElementById('planSemester').value = plan.semester;
-            document.getElementById('planClassroom').value = plan.classroom;
+        const p = currentPlans.find(x => x.id === id);
+        if (p) {
+            document.getElementById('planId').value = p.id;
+            form.elements['courseId'].value = p.courseId;
+            form.elements['teacherId'].value = p.teacherId;
+            form.elements['semester'].value = p.semester;
+            form.elements['classroom'].value = p.classroom;
             
-            // 解析时间 "周一 1-2节"
-            const parts = plan.timeSlots.split(' ');
-            if (parts.length === 2) {
-                document.getElementById('planDay').value = parts[0];
-                document.getElementById('planSlot').value = parts[1];
-            }
+            const [day, slot] = p.timeSlots.split(' ');
+            form.elements['day'].value = day;
+            form.elements['slot'].value = slot;
+            
+            document.getElementById('planModalLabel').textContent = '编辑计划';
         }
+    } else {
+        form.elements['semester'].value = '2024-2025-1';
+        document.getElementById('planModalLabel').textContent = '新增计划';
     }
     planModal.show();
 }
 
-function savePlan() {
+async function savePlan() {
+    const form = document.getElementById('planForm');
     const id = document.getElementById('planId').value;
-    const courseId = document.getElementById('planCourseId').value;
-    const teacherId = document.getElementById('planTeacherId').value;
-    const semester = document.getElementById('planSemester').value;
-    const classroom = document.getElementById('planClassroom').value;
-    const day = document.getElementById('planDay').value;
-    const slot = document.getElementById('planSlot').value;
-
-    if (!courseId || !teacherId) return alert('请选择课程和教师');
-
-    const timeSlots = `${day} ${slot}`;
-
-    // 简单的冲突检测 (可选)
-    // ...
-
-    const newPlan = {
+    
+    const plan = {
         id: id || generateId('plan_'),
-        courseId,
-        teacherId,
-        semester,
-        classroom,
-        timeSlots
+        courseId: form.elements['courseId'].value,
+        teacherId: form.elements['teacherId'].value,
+        semester: form.elements['semester'].value,
+        classroom: form.elements['classroom'].value,
+        timeSlots: `${form.elements['day'].value} ${form.elements['slot'].value}`
     };
 
-    if (id) {
-        const index = currentPlans.findIndex(p => p.id === id);
-        if (index !== -1) currentPlans[index] = newPlan;
-    } else {
-        currentPlans.push(newPlan);
-    }
-
-    saveToStorage(STORAGE_KEYS.COURSE_PLANS, currentPlans);
+    await db.put(STORAGE_KEYS.COURSE_PLANS, plan);
     planModal.hide();
-    renderPlans();
-    renderSchedule();
+    loadAllData();
 }
 
-function deletePlan(id) {
-    if (!confirm('确定要删除这个开课计划吗？')) return;
-    currentPlans = currentPlans.filter(p => p.id !== id);
-    saveToStorage(STORAGE_KEYS.COURSE_PLANS, currentPlans);
-    renderPlans();
-    renderSchedule();
+async function deletePlan(id) {
+    if (confirm('确定删除该计划吗？')) {
+        await db.delete(STORAGE_KEYS.COURSE_PLANS, id);
+        loadAllData();
+    }
 }
-
-// ==========================================
-// 课表渲染 (可视化)
-// ==========================================
 
 function renderSchedule() {
-    const tbody = document.querySelector('#schedule-table tbody');
-    const slots = ['1-2节', '3-4节', '5-6节', '7-8节'];
     const days = ['周一', '周二', '周三', '周四', '周五'];
+    const slots = ['1-2节', '3-4节', '5-6节', '7-8节'];
+    const tbody = document.querySelector('.schedule-table tbody');
+    if (!tbody) return;
 
-    let html = '';
-
-    slots.forEach(slot => {
-        html += `<tr><td class="table-light fw-bold">${slot}</td>`;
-        
-        days.forEach(day => {
-            // 查找该时间段的课程
-            const plan = currentPlans.find(p => p.timeSlots === `${day} ${slot}` && p.semester === '2024-2025-1');
-            
-            if (plan) {
-                const course = currentCourses.find(c => c.id === plan.courseId);
-                const teacher = currentUsers.find(u => u.id === plan.teacherId);
-                html += `
-                    <td>
-                        <div class="schedule-cell">
-                            <strong>${course ? course.name : '未知'}</strong><br>
-                            <small>${teacher ? teacher.name : '未知'}</small><br>
-                            <small>@${plan.classroom}</small>
-                        </div>
-                    </td>
-                `;
-            } else {
-                html += `<td></td>`;
-            }
-        });
-
-        html += `</tr>`;
-    });
-
-    tbody.innerHTML = html;
+    tbody.innerHTML = slots.map(slot => `
+        <tr>
+            <td class="table-light fw-bold">${slot}</td>
+            ${days.map(day => {
+                const plan = currentPlans.find(p => p.timeSlots === `${day} ${slot}` && p.semester === '2024-2025-1');
+                if (plan) {
+                    return `
+                        <td>
+                            <div class="schedule-cell">
+                                <strong>${getCourseName(plan.courseId)}</strong><br>
+                                <small>${getUserName(plan.teacherId)}</small><br>
+                                <small>@${plan.classroom}</small>
+                            </div>
+                        </td>
+                    `;
+                }
+                return '<td></td>';
+            }).join('')}
+        </tr>
+    `).join('');
 }
 
 // ==========================================
-// 成绩审核与发布
+// 成绩审核
 // ==========================================
 
 function renderScoreAudit() {
     const tbody = document.querySelector('#score-audit-table tbody');
-    
-    // 过滤出本学期的课程计划 (假设当前学期是 2024-2025-1)
+    if (!tbody) return;
+
     const semesterPlans = currentPlans.filter(p => p.semester === '2024-2025-1');
-
+    
     tbody.innerHTML = semesterPlans.map(plan => {
-        const course = currentCourses.find(c => c.id === plan.courseId) || { name: '未知课程' };
-        const teacher = currentUsers.find(u => u.id === plan.teacherId) || { name: '未知教师' };
-        
-        // 获取该课程的所有成绩
         const planScores = currentScores.filter(s => s.coursePlanId === plan.id);
-        const studentCount = planScores.length;
-        
-        let avgScore = 0;
-        let excellenceRate = 0;
-        let passRate = 0;
-        let status = 'unpublished';
+        const count = planScores.length;
+        let avg = 0, excellenceRate = 0, passRate = 0, status = 'unpublished';
+        let isAbnormal = false;
 
-        if (studentCount > 0) {
-            const totalScore = planScores.reduce((sum, s) => sum + (s.total || 0), 0);
-            avgScore = (totalScore / studentCount).toFixed(1);
+        if (count > 0) {
+            const total = planScores.reduce((sum, s) => sum + (s.total || 0), 0);
+            avg = (total / count).toFixed(1);
+            excellenceRate = ((planScores.filter(s => s.total >= 90).length / count) * 100).toFixed(1);
+            passRate = ((planScores.filter(s => s.total >= 60).length / count) * 100).toFixed(1);
+            if (planScores.some(s => s.status === 'published')) status = 'published';
             
-            const excellentCount = planScores.filter(s => (s.total || 0) >= 90).length;
-            excellenceRate = ((excellentCount / studentCount) * 100).toFixed(1);
-            
-            const passCount = planScores.filter(s => (s.total || 0) >= 60).length;
-            passRate = ((passCount / studentCount) * 100).toFixed(1);
-
-            // 只要有一个是 published，就认为是 published (通常应该统一)
-            if (planScores.some(s => s.status === 'published')) {
-                status = 'published';
+            // 异常检测: 优秀率>60% 或 及格率<70%
+            if (parseFloat(excellenceRate) > 60 || parseFloat(passRate) < 70) {
+                isAbnormal = true;
             }
         }
 
-        // 异常检测
-        // 课程维度：如果优秀率 > 60% 或及格率 < 70%，标记红色警告。
-        const isAbnormal = (parseFloat(excellenceRate) > 60) || (parseFloat(passRate) < 70 && studentCount > 0);
-        const rowClass = isAbnormal ? 'table-danger' : '';
-
-        const statusBadge = status === 'published' 
-            ? '<span class="badge bg-success">已发布</span>' 
-            : '<span class="badge bg-secondary">未发布</span>';
-
-        const publishBtn = status === 'published'
-            ? `<button class="btn btn-sm btn-secondary" disabled>已发布</button>`
-            : `<button class="btn btn-sm btn-success" onclick="publishScores('${plan.id}')">发布</button>`;
-
         return `
-        <tr class="${rowClass}">
-            <td><a href="#" onclick="viewScoreDetails('${plan.id}'); return false;">${course.name}</a></td>
-            <td>${teacher.name}</td>
-            <td>${studentCount}</td>
-            <td>${avgScore}</td>
-            <td>${excellenceRate}%</td>
-            <td>${passRate}%</td>
-            <td>${statusBadge}</td>
-            <td>
-                ${publishBtn}
-            </td>
-        </tr>
+            <tr class="${isAbnormal ? 'table-danger' : ''}">
+                <td><a href="#" onclick="viewScoreDetails('${plan.id}'); return false;">${getCourseName(plan.courseId)}</a></td>
+                <td>${getUserName(plan.teacherId)}</td>
+                <td>${count}</td>
+                <td>${avg}</td>
+                <td>${excellenceRate}%</td>
+                <td>${passRate}%</td>
+                <td>
+                    <span class="badge ${status === 'published' ? 'bg-success' : 'bg-secondary'}">
+                        ${status === 'published' ? '已发布' : '未发布'}
+                    </span>
+                </td>
+                <td>
+                    ${status !== 'published' ? 
+                        `<button class="btn btn-sm btn-success" onclick="publishScore('${plan.id}')">发布</button>` : 
+                        `<button class="btn btn-sm btn-secondary" disabled>已发布</button>`
+                    }
+                </td>
+            </tr>
         `;
     }).join('');
 }
 
 function viewScoreDetails(planId) {
-    const plan = currentPlans.find(p => p.id === planId);
-    if (!plan) return;
-
-    const course = currentCourses.find(c => c.id === plan.courseId);
-    document.getElementById('scoreDetailTitle').innerText = `${course.name} - 成绩明细`;
-
-    // 更新表头
-    const thead = document.querySelector('#score-detail-table thead tr');
-    thead.innerHTML = `
-        <th>学号</th>
-        <th>姓名</th>
-        <th>平时/期中</th>
-        <th>期末成绩</th>
-        <th>总评</th>
-        <th>异常检测</th>
-    `;
-
-    const planScores = currentScores.filter(s => s.coursePlanId === planId);
     const tbody = document.querySelector('#score-detail-table tbody');
+    const planScores = currentScores.filter(s => s.coursePlanId === planId);
     
-    let hasStudentAnomaly = false;
-
-    tbody.innerHTML = planScores.map(score => {
-        const student = currentUsers.find(u => u.id === score.studentId) || { name: '未知学生', id: score.studentId };
-        
-        // 学生维度异常检测：同一门课程内，期末成绩与期中成绩对比
-        // 逻辑：如果期末成绩与期中成绩分差超过 20 分，视为异常波动
-        const mid = score.items.midterm || 0;
-        const final = score.items.final || 0;
+    tbody.innerHTML = planScores.map(s => {
+        // 异常检测: 期末与期中分差 > 20
+        const mid = s.midterm || 0;
+        const final = s.final || 0;
         const diff = final - mid;
-        
-        let anomalyWarning = '';
+        let anomalyHtml = '';
         
         if (Math.abs(diff) > 20) {
-            hasStudentAnomaly = true;
-            const type = diff > 0 ? '突升' : '突降'; // 期末比期中高为突升
-            anomalyWarning = `<span class="badge bg-danger" title="期中: ${mid}, 期末: ${final}">${type} ${Math.abs(diff)}分</span>`;
+            const type = diff > 0 ? '突升' : '突降';
+            anomalyHtml = `<span class="badge bg-danger">${type} ${Math.abs(diff)}分</span>`;
         }
 
         return `
-        <tr>
-            <td>${student.username}</td>
-            <td>${student.name}</td>
-            <td>
-                <small class="d-block text-muted">小测: ${score.items.quiz || '-'}</small>
-                <strong>期中: ${score.items.midterm || '-'}</strong>
-            </td>
-            <td><strong>${score.items.final || 0}</strong></td>
-            <td><span class="text-primary fw-bold">${score.total || 0}</span></td>
-            <td>${anomalyWarning}</td>
-        </tr>
+            <tr>
+                <td>${getUserName(s.studentId, 'username')}</td>
+                <td>${getUserName(s.studentId)}</td>
+                <td>
+                    <small class="d-block text-muted">小测: ${s.quiz || '-'}</small>
+                    <strong>期中: ${s.midterm || '-'}</strong>
+                </td>
+                <td><strong>${s.final || '-'}</strong></td>
+                <td class="text-primary fw-bold">${s.total}</td>
+                <td>${anomalyHtml}</td>
+            </tr>
         `;
     }).join('');
-
-    const warningBadge = document.getElementById('scoreDetailWarning');
-    warningBadge.style.display = hasStudentAnomaly ? 'inline-block' : 'none';
 
     scoreDetailModal.show();
 }
 
-function publishScores(planId) {
-    if (!confirm('发布后学生将可见成绩，且不可撤销。确定发布吗？')) return;
-
-    // 更新该课程计划下所有成绩的状态
-    let updatedCount = 0;
-    currentScores.forEach(score => {
-        if (score.coursePlanId === planId) {
-            score.status = 'published';
-            updatedCount++;
-        }
-    });
-
-    if (updatedCount > 0) {
-        saveToStorage(STORAGE_KEYS.SCORES, currentScores);
-        alert(`成功发布 ${updatedCount} 条成绩记录！`);
-        renderScoreAudit();
-    } else {
-        alert('该课程暂无成绩可发布。');
+async function publishScore(planId) {
+    if (!confirm('确定发布该课程成绩吗？')) return;
+    
+    const planScores = currentScores.filter(s => s.coursePlanId === planId);
+    for (const s of planScores) {
+        s.status = 'published';
+        await db.put(STORAGE_KEYS.SCORES, s);
     }
+    
+    loadAllData();
 }
 
-function exportAllScores() {
-    // 模拟导出
-    alert('正在生成报表...\n导出成功！文件已保存为 scores_report_2024.xlsx');
+// ==========================================
+// 辅助函数
+// ==========================================
+
+function getClassName(id) {
+    return currentClasses.find(c => c.id === id)?.name || '-';
+}
+
+function getCourseName(id) {
+    return currentCourses.find(c => c.id === id)?.name || '未知课程';
+}
+
+function getUserName(id, field = 'name') {
+    return currentUsers.find(u => u.id === id)?.[field] || '未知用户';
 }
