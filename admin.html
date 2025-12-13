@@ -3,16 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>教学管理员端 - 成绩管理教学平台</title>
+    <title>教学管理员仪表盘 - 成绩管理教学平台</title>
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <style>
         body {
             font-family: "Microsoft YaHei", sans-serif;
             background-color: #f8f9fa;
         }
+        .navbar-brand {
+            font-weight: bold;
+        }
         .sidebar {
-            min-height: 100vh;
+            min-height: calc(100vh - 56px); /* Subtract navbar height */
             background-color: #343a40;
             color: white;
         }
@@ -25,6 +30,10 @@
         .sidebar a:hover, .sidebar a.active {
             color: white;
             background-color: #495057;
+        }
+        .sidebar .submenu a {
+            padding-left: 30px;
+            font-size: 0.9em;
         }
         .main-content {
             padding: 20px;
@@ -44,33 +53,74 @@
             padding: 5px;
             font-size: 0.9em;
         }
+        .sortable {
+            cursor: pointer;
+        }
+        .sortable:hover {
+            background-color: #f1f1f1;
+        }
     </style>
 </head>
 <body>
 
+<!-- Top Navbar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom border-secondary">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="#">教学管理员仪表盘</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
+            <ul class="navbar-nav">
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                        <i class="bi bi-person-circle"></i> 管理员
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="#">个人设置</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item text-danger" href="#" onclick="logout()">退出登录</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
 <div class="container-fluid">
     <div class="row">
         <!-- Sidebar -->
-        <div class="col-md-2 sidebar p-0">
-            <div class="p-3 text-center border-bottom border-secondary">
-                <h4>教务管理系统</h4>
-                <small>管理员端</small>
-            </div>
-            <nav class="mt-3">
-                <a href="#" class="nav-link active" data-target="class-section">班级管理</a>
-                <a href="#" class="nav-link" data-target="course-section">课程管理</a>
-                <a href="#" class="nav-link" data-target="plan-section">开课计划 & 课表</a>
-                <a href="#" class="nav-link" data-target="score-section">成绩审核 & 发布</a>
-                <!-- 预留接口 -->
-                <a href="#" class="nav-link disabled">学生管理 (待开发)</a>
-                <a href="#" class="nav-link disabled">教师管理 (待开发)</a>
+        <div class="col-md-2 sidebar p-0 collapse d-md-block" id="sidebarMenu">
+            <nav class="mt-2">
+                <!-- 基础数据管理 (Accordion) -->
+                <a href="#submenu-basic" data-bs-toggle="collapse" class="d-flex justify-content-between align-items-center nav-link">
+                    <span><i class="bi bi-database"></i> 基础数据管理</span>
+                    <i class="bi bi-chevron-down small"></i>
+                </a>
+                <div class="collapse show submenu" id="submenu-basic">
+                    <a href="#" class="nav-link active" data-target="class-section">班级管理</a>
+                    <a href="#" class="nav-link" data-target="student-section">学生管理</a>
+                    <a href="#" class="nav-link" data-target="course-section">课程管理</a>
+                    <a href="#" class="nav-link" data-target="teacher-section">教师管理</a>
+                    <a href="#" class="nav-link" data-target="plan-section">开课计划</a>
+                </div>
+
+                <!-- 成绩审核 -->
+                <a href="#" class="nav-link" data-target="score-section">
+                    <i class="bi bi-check-circle"></i> 成绩审核与发布
+                </a>
+                
+                <!-- 退出 -->
+                <a href="#" class="nav-link text-danger mt-5" onclick="logout()">
+                    <i class="bi bi-box-arrow-right"></i> 退出系统
+                </a>
             </nav>
         </div>
 
         <!-- Main Content -->
         <div class="col-md-10 main-content">
             
-            <!-- 1. 班级管理模块 -->
+            <!-- 1. 班级管理 -->
             <div id="class-section" class="content-section">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h2>班级管理</h2>
@@ -81,18 +131,44 @@
                         <table class="table table-hover" id="class-table">
                             <thead>
                                 <tr>
-                                    <th>ID</th>
-                                    <th>班级名称</th>
+                                    <th class="sortable" onclick="handleSort('class-table', 'id')">ID <i class="bi bi-arrow-down-up"></i></th>
+                                    <th class="sortable" onclick="handleSort('class-table', 'name')">班级名称 <i class="bi bi-arrow-down-up"></i></th>
                                     <th>操作</th>
                                 </tr>
                             </thead>
-                            <tbody><!-- JS 渲染 --></tbody>
+                            <tbody></tbody>
                         </table>
                     </div>
                 </div>
             </div>
 
-            <!-- 2. 课程管理模块 -->
+            <!-- 2. 学生管理 -->
+            <div id="student-section" class="content-section" style="display: none;">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2>学生管理</h2>
+                    <div class="d-flex gap-2">
+                        <input type="text" class="form-control" placeholder="搜索学生..." onkeyup="handleSearch('student-table', this.value)">
+                        <button class="btn btn-primary text-nowrap" onclick="openStudentModal()">+ 新增学生</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-body">
+                        <table class="table table-hover" id="student-table">
+                            <thead>
+                                <tr>
+                                    <th class="sortable" onclick="handleSort('student-table', 'username')">学号 <i class="bi bi-arrow-down-up"></i></th>
+                                    <th class="sortable" onclick="handleSort('student-table', 'name')">姓名 <i class="bi bi-arrow-down-up"></i></th>
+                                    <th class="sortable" onclick="handleSort('student-table', 'className')">班级 <i class="bi bi-arrow-down-up"></i></th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. 课程管理 -->
             <div id="course-section" class="content-section" style="display: none;">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h2>课程管理</h2>
@@ -110,20 +186,41 @@
                                     <th>操作</th>
                                 </tr>
                             </thead>
-                            <tbody><!-- JS 渲染 --></tbody>
+                            <tbody></tbody>
                         </table>
                     </div>
                 </div>
             </div>
 
-            <!-- 3. 开课计划模块 -->
+            <!-- 4. 教师管理 -->
+            <div id="teacher-section" class="content-section" style="display: none;">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2>教师管理</h2>
+                    <button class="btn btn-primary" onclick="openTeacherModal()">+ 新增教师</button>
+                </div>
+                <div class="card">
+                    <div class="card-body">
+                        <table class="table table-hover" id="teacher-table">
+                            <thead>
+                                <tr>
+                                    <th>工号</th>
+                                    <th>姓名</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 5. 开课计划 -->
             <div id="plan-section" class="content-section" style="display: none;">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h2>开课计划管理</h2>
                     <button class="btn btn-primary" onclick="openPlanModal()">+ 新增开课计划</button>
                 </div>
                 
-                <!-- 计划列表 -->
                 <div class="card mb-4">
                     <div class="card-header">计划列表</div>
                     <div class="card-body">
@@ -138,12 +235,11 @@
                                     <th>操作</th>
                                 </tr>
                             </thead>
-                            <tbody><!-- JS 渲染 --></tbody>
+                            <tbody></tbody>
                         </table>
                     </div>
                 </div>
 
-                <!-- 课表视图 -->
                 <div class="card">
                     <div class="card-header">本学期课表预览 (2024-2025-1)</div>
                     <div class="card-body">
@@ -158,21 +254,17 @@
                                     <th>周五</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                <!-- JS 渲染 1-2, 3-4, 5-6, 7-8 节 -->
-                            </tbody>
+                            <tbody></tbody>
                         </table>
                     </div>
                 </div>
             </div>
 
-            <!-- 4. 成绩审核模块 -->
+            <!-- 6. 成绩审核 -->
             <div id="score-section" class="content-section" style="display: none;">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h2>成绩审核与发布</h2>
-                    <div>
-                        <button class="btn btn-outline-secondary" onclick="exportAllScores()">导出所有报表</button>
-                    </div>
+                    <button class="btn btn-outline-secondary" onclick="exportAllScores()">导出所有报表</button>
                 </div>
                 <div class="alert alert-info">
                     <i class="bi bi-info-circle"></i> 红色背景行表示数据异常（优秀率>60% 或 及格率<70%），请重点审核。
@@ -192,7 +284,7 @@
                                     <th>操作</th>
                                 </tr>
                             </thead>
-                            <tbody><!-- JS 渲染 --></tbody>
+                            <tbody></tbody>
                         </table>
                     </div>
                 </div>
@@ -203,40 +295,6 @@
 </div>
 
 <!-- Modals -->
-
-<!-- Score Detail Modal -->
-<div class="modal fade" id="scoreDetailModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">成绩明细</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="mb-3 d-flex justify-content-between">
-                    <h6 id="scoreDetailTitle"></h6>
-                    <span class="badge bg-warning text-dark" id="scoreDetailWarning" style="display:none">存在异常波动学生</span>
-                </div>
-                <table class="table table-sm table-bordered" id="score-detail-table">
-                    <thead>
-                        <tr>
-                            <th>学号</th>
-                            <th>姓名</th>
-                            <th>平时成绩</th>
-                            <th>期末成绩</th>
-                            <th>总评</th>
-                            <th>异常检测</th>
-                        </tr>
-                    </thead>
-                    <tbody><!-- JS 渲染 --></tbody>
-                </table>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
-            </div>
-        </div>
-    </div>
-</div>
 
 <!-- Class Modal -->
 <div class="modal fade" id="classModal" tabindex="-1">
@@ -258,6 +316,68 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
                 <button type="button" class="btn btn-primary" onclick="saveClass()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Student Modal -->
+<div class="modal fade" id="studentModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">编辑学生</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="studentForm">
+                    <input type="hidden" id="studentId">
+                    <div class="mb-3">
+                        <label class="form-label">学号 (Username)</label>
+                        <input type="text" class="form-control" id="studentUsername" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">姓名</label>
+                        <input type="text" class="form-control" id="studentName" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">所属班级</label>
+                        <select class="form-select" id="studentClassId" required></select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="saveStudent()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Teacher Modal -->
+<div class="modal fade" id="teacherModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">编辑教师</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="teacherForm">
+                    <input type="hidden" id="teacherId">
+                    <div class="mb-3">
+                        <label class="form-label">工号 (Username)</label>
+                        <input type="text" class="form-control" id="teacherUsername" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">姓名</label>
+                        <input type="text" class="form-control" id="teacherName" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="saveTeacher()">保存</button>
             </div>
         </div>
     </div>
@@ -352,6 +472,40 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
                 <button type="button" class="btn btn-primary" onclick="savePlan()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Score Detail Modal -->
+<div class="modal fade" id="scoreDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">成绩明细</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3 d-flex justify-content-between">
+                    <h6 id="scoreDetailTitle"></h6>
+                    <span class="badge bg-warning text-dark" id="scoreDetailWarning" style="display:none">存在异常波动学生</span>
+                </div>
+                <table class="table table-sm table-bordered" id="score-detail-table">
+                    <thead>
+                        <tr>
+                            <th>学号</th>
+                            <th>姓名</th>
+                            <th>平时成绩</th>
+                            <th>期末成绩</th>
+                            <th>总评</th>
+                            <th>异常检测</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
             </div>
         </div>
     </div>
