@@ -7,15 +7,17 @@ let currentClasses = [];
 let currentCourses = [];
 let currentPlans = [];
 let currentUsers = [];
+let currentScores = [];
 
 // Bootstrap Modal 实例
-let classModal, courseModal, planModal;
+let classModal, courseModal, planModal, scoreDetailModal;
 
 document.addEventListener('DOMContentLoaded', () => {
     // 初始化 Modals
     classModal = new bootstrap.Modal(document.getElementById('classModal'));
     courseModal = new bootstrap.Modal(document.getElementById('courseModal'));
     planModal = new bootstrap.Modal(document.getElementById('planModal'));
+    scoreDetailModal = new bootstrap.Modal(document.getElementById('scoreDetailModal'));
 
     // 绑定导航事件
     document.querySelectorAll('.sidebar .nav-link').forEach(link => {
@@ -51,11 +53,13 @@ function loadAllData() {
     currentCourses = loadFromStorage(STORAGE_KEYS.COURSES) || [];
     currentPlans = loadFromStorage(STORAGE_KEYS.COURSE_PLANS) || [];
     currentUsers = loadFromStorage(STORAGE_KEYS.USERS) || [];
+    currentScores = loadFromStorage(STORAGE_KEYS.SCORES) || [];
 
     renderClasses();
     renderCourses();
     renderPlans();
     renderSchedule();
+    renderScoreAudit();
 }
 
 // ==========================================
@@ -342,4 +346,151 @@ function renderSchedule() {
     });
 
     tbody.innerHTML = html;
+}
+
+// ==========================================
+// 成绩审核与发布
+// ==========================================
+
+function renderScoreAudit() {
+    const tbody = document.querySelector('#score-audit-table tbody');
+    
+    // 过滤出本学期的课程计划 (假设当前学期是 2024-2025-1)
+    const semesterPlans = currentPlans.filter(p => p.semester === '2024-2025-1');
+
+    tbody.innerHTML = semesterPlans.map(plan => {
+        const course = currentCourses.find(c => c.id === plan.courseId) || { name: '未知课程' };
+        const teacher = currentUsers.find(u => u.id === plan.teacherId) || { name: '未知教师' };
+        
+        // 获取该课程的所有成绩
+        const planScores = currentScores.filter(s => s.coursePlanId === plan.id);
+        const studentCount = planScores.length;
+        
+        let avgScore = 0;
+        let excellenceRate = 0;
+        let passRate = 0;
+        let status = 'unpublished';
+
+        if (studentCount > 0) {
+            const totalScore = planScores.reduce((sum, s) => sum + (s.total || 0), 0);
+            avgScore = (totalScore / studentCount).toFixed(1);
+            
+            const excellentCount = planScores.filter(s => (s.total || 0) >= 90).length;
+            excellenceRate = ((excellentCount / studentCount) * 100).toFixed(1);
+            
+            const passCount = planScores.filter(s => (s.total || 0) >= 60).length;
+            passRate = ((passCount / studentCount) * 100).toFixed(1);
+
+            // 只要有一个是 published，就认为是 published (通常应该统一)
+            if (planScores.some(s => s.status === 'published')) {
+                status = 'published';
+            }
+        }
+
+        // 异常检测
+        // 课程维度：如果优秀率 > 60% 或及格率 < 70%，标记红色警告。
+        const isAbnormal = (parseFloat(excellenceRate) > 60) || (parseFloat(passRate) < 70 && studentCount > 0);
+        const rowClass = isAbnormal ? 'table-danger' : '';
+
+        const statusBadge = status === 'published' 
+            ? '<span class="badge bg-success">已发布</span>' 
+            : '<span class="badge bg-secondary">未发布</span>';
+
+        const publishBtn = status === 'published'
+            ? `<button class="btn btn-sm btn-secondary" disabled>已发布</button>`
+            : `<button class="btn btn-sm btn-success" onclick="publishScores('${plan.id}')">发布</button>`;
+
+        return `
+        <tr class="${rowClass}">
+            <td><a href="#" onclick="viewScoreDetails('${plan.id}'); return false;">${course.name}</a></td>
+            <td>${teacher.name}</td>
+            <td>${studentCount}</td>
+            <td>${avgScore}</td>
+            <td>${excellenceRate}%</td>
+            <td>${passRate}%</td>
+            <td>${statusBadge}</td>
+            <td>
+                ${publishBtn}
+            </td>
+        </tr>
+        `;
+    }).join('');
+}
+
+function viewScoreDetails(planId) {
+    const plan = currentPlans.find(p => p.id === planId);
+    if (!plan) return;
+
+    const course = currentCourses.find(c => c.id === plan.courseId);
+    document.getElementById('scoreDetailTitle').innerText = `${course.name} - 成绩明细`;
+
+    const planScores = currentScores.filter(s => s.coursePlanId === planId);
+    const tbody = document.querySelector('#score-detail-table tbody');
+    
+    let hasStudentAnomaly = false;
+
+    tbody.innerHTML = planScores.map(score => {
+        const student = currentUsers.find(u => u.id === score.studentId) || { name: '未知学生', id: score.studentId };
+        
+        // 学生维度异常检测：如果某学生多门课成绩突然提升/下降超过 20 分
+        // 逻辑：计算该学生在其他课程的平均分，与当前课程分数对比
+        const otherScores = currentScores.filter(s => s.studentId === score.studentId && s.coursePlanId !== planId);
+        let anomalyWarning = '';
+        
+        if (otherScores.length > 0) {
+            const otherTotal = otherScores.reduce((sum, s) => sum + (s.total || 0), 0);
+            const otherAvg = otherTotal / otherScores.length;
+            const diff = (score.total || 0) - otherAvg;
+            
+            if (Math.abs(diff) > 20) {
+                hasStudentAnomaly = true;
+                const type = diff > 0 ? '突升' : '突降';
+                anomalyWarning = `<span class="badge bg-danger" title="历史均分: ${otherAvg.toFixed(1)}">${type} ${Math.abs(diff).toFixed(1)}分</span>`;
+            }
+        }
+
+        return `
+        <tr>
+            <td>${student.id}</td>
+            <td>${student.name}</td>
+            <td>
+                平时: ${score.items.homework1 || 0}, ${score.items.homework2 || 0}
+            </td>
+            <td>${score.items.final || 0}</td>
+            <td><strong>${score.total || 0}</strong></td>
+            <td>${anomalyWarning}</td>
+        </tr>
+        `;
+    }).join('');
+
+    const warningBadge = document.getElementById('scoreDetailWarning');
+    warningBadge.style.display = hasStudentAnomaly ? 'inline-block' : 'none';
+
+    scoreDetailModal.show();
+}
+
+function publishScores(planId) {
+    if (!confirm('发布后学生将可见成绩，且不可撤销。确定发布吗？')) return;
+
+    // 更新该课程计划下所有成绩的状态
+    let updatedCount = 0;
+    currentScores.forEach(score => {
+        if (score.coursePlanId === planId) {
+            score.status = 'published';
+            updatedCount++;
+        }
+    });
+
+    if (updatedCount > 0) {
+        saveToStorage(STORAGE_KEYS.SCORES, currentScores);
+        alert(`成功发布 ${updatedCount} 条成绩记录！`);
+        renderScoreAudit();
+    } else {
+        alert('该课程暂无成绩可发布。');
+    }
+}
+
+function exportAllScores() {
+    // 模拟导出
+    alert('正在生成报表...\n导出成功！文件已保存为 scores_report_2024.xlsx');
 }
