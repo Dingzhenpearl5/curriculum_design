@@ -246,6 +246,120 @@
         </div>
     </div>
 
+    <!-- 2.1 学生编辑 (个人中心风格) -->
+    <div id="student-edit-section" class="content-section" style="display: none; background-color: #f8f9fa; min-height: calc(100vh - 56px);">
+        <!-- Top Navigation Bar (Sub-nav) -->
+        <div class="bg-white border-bottom px-4 d-flex justify-content-between align-items-center" style="height: 60px;">
+            <div class="d-flex gap-4 h-100">
+                <a href="#" class="nav-link-custom active d-flex align-items-center text-decoration-none px-2" style="border-bottom: 3px solid #fd7e14; color: #fd7e14; font-weight: 500;">基本信息</a>
+                <a href="#" class="nav-link-custom d-flex align-items-center text-decoration-none px-2 text-secondary" style="border-bottom: 3px solid transparent;">修改密码</a>
+            </div>
+            <button class="btn btn-sm btn-outline-secondary" onclick="cancelEdit()">
+                <i class="bi bi-x-lg"></i> 关闭
+            </button>
+        </div>
+
+        <!-- Main Content Area -->
+        <div class="container py-5">
+            <div class="bg-white rounded shadow-sm mx-auto p-5" style="max-width: 800px;">
+                <form id="studentEditForm">
+                    <input type="hidden" id="editStudentId">
+                    
+                    <!-- Nickname -->
+                    <div class="mb-4 row">
+                        <label class="col-sm-2 col-form-label fw-bold text-end"><span class="text-danger me-1">*</span>昵称</label>
+                        <div class="col-sm-8">
+                            <input type="text" class="form-control" id="editStudentUsername" placeholder="请输入昵称 (学号)">
+                        </div>
+                    </div>
+
+                    <!-- Name -->
+                    <div class="mb-4 row">
+                        <label class="col-sm-2 col-form-label fw-bold text-end"><span class="text-danger me-1">*</span>姓名</label>
+                        <div class="col-sm-8">
+                            <input type="text" class="form-control bg-light" id="editStudentName" readonly>
+                        </div>
+                    </div>
+
+                    <!-- Class (Added for context) -->
+                    <div class="mb-4 row">
+                        <label class="col-sm-2 col-form-label fw-bold text-end"><span class="text-danger me-1">*</span>班级</label>
+                        <div class="col-sm-8">
+                            <select class="form-select" id="editStudentClassId"></select>
+                        </div>
+                    </div>
+
+                    <!-- Gender -->
+                    <div class="mb-4 row">
+                        <label class="col-sm-2 col-form-label fw-bold text-end"><span class="text-danger me-1">*</span>性别</label>
+                        <div class="col-sm-8 d-flex align-items-center gap-4 pt-2">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="gender" id="genderMale" value="male" checked style="border-color: #fd7e14; background-color: #fd7e14;">
+                                <label class="form-check-label" for="genderMale">男</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="gender" id="genderFemale" value="female">
+                                <label class="form-check-label" for="genderFemale">女</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="gender" id="genderSecret" value="secret">
+                                <label class="form-check-label" for="genderSecret">不公开</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Email -->
+                    <div class="mb-4 row">
+                        <label class="col-sm-2 col-form-label fw-bold text-end">邮箱</label>
+                        <div class="col-sm-8 d-flex align-items-center">
+                            <span class="text-secondary me-3">zhangsan@example.com</span>
+                            <a href="#" class="text-decoration-none text-primary">修改邮箱</a>
+                        </div>
+                    </div>
+
+                    <!-- Phone -->
+                    <div class="mb-4 row">
+                        <label class="col-sm-2 col-form-label fw-bold text-end">手机</label>
+                        <div class="col-sm-8 d-flex align-items-center">
+                            <span class="text-secondary me-3">138****8888</span>
+                            <a href="#" class="text-decoration-none text-primary me-3">修改手机</a>
+                            <a href="#" class="text-decoration-none text-success">解除绑定</a>
+                        </div>
+                    </div>
+
+                    <!-- Birthday -->
+                    <div class="mb-4 row">
+                        <label class="col-sm-2 col-form-label fw-bold text-end">生日</label>
+                        <div class="col-sm-8">
+                            <input type="date" class="form-control text-secondary" style="max-width: 200px;">
+                        </div>
+                    </div>
+
+                    <!-- Region -->
+                    <div class="mb-4 row">
+                        <label class="col-sm-2 col-form-label fw-bold text-end">地区</label>
+                        <div class="col-sm-8">
+                            <select class="form-select" style="max-width: 200px;">
+                                <option value="" selected disabled>请选择省份</option>
+                                <option value="beijing">北京</option>
+                                <option value="shanghai">上海</option>
+                                <option value="guangdong">广东</option>
+                                <option value="zhejiang">浙江</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Save Button -->
+                    <div class="row mt-5">
+                        <div class="col-sm-8 offset-sm-2 text-center">
+                            <button type="button" class="btn text-white px-5 py-2" onclick="saveStudentProfile()" style="background-color: #fd7e14; border-radius: 4px;">保存</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- 3. 课程管理 -->
     <div id="course-section" class="content-section" style="display: none;">
         <div class="d-flex justify-content-between align-items-center mb-3">
