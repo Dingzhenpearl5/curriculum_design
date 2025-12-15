@@ -42,12 +42,47 @@ curriculum_design/
 
 系统使用 **IndexedDB** 进行本地数据持久化，数据库名为 `CurriculumDesignDB`。
 
-| 表名 (Store) | 用途 | 关键字段 |
-| :--- | :--- | :--- |
-| `users` | 用户表 | id, username, role, avatar, ... |
-| `classes` | 班级表 | id, name |
-| `courses` | 课程表 | id, code, name, credits |
-| `plans` | 开课计划 | id, courseId, teacherId, semester |
-| `scores` | 成绩表 | id, studentId, final, total |
+### 1. 用户表 (`users`)
+存储学生、教师和管理员信息。
+*   `id`: 主键 (如 `stu_001`)
+*   `username`: 学号/工号
+*   `name`: 姓名
+*   `role`: 角色 (`student`, `teacher`, `admin`)
+*   `classId`: 班级ID (仅学生)
+*   `avatar`: 头像 (Base64)
+*   `gender`, `phone`, `email`, `birthday`, `region`: 个人信息
+
+### 2. 班级表 (`classes`)
+存储行政班级。
+*   `id`: 主键
+*   `name`: 班级名称
+
+### 3. 课程表 (`courses`)
+存储课程基础信息。
+*   `id`: 主键
+*   `code`: 课程代码
+*   `name`: 课程名称
+*   `credits`: 学分
+*   `department`: 开课院系
+
+### 4. 开课计划表 (`plans`)
+存储学期排课信息。
+*   `id`: 主键
+*   `courseId`: 关联课程ID
+*   `teacherId`: 关联教师ID
+*   `semester`: 学期 (如 `2024-2025-1`)
+*   `classroom`: 教室
+*   `timeSlots`: 上课时间 (格式: `周一,周三 1,2节`)
+*   `weekType`: **[新增]** 周数类型 (`all`:每周, `odd`:单周, `even`:双周)
+*   `maxStudents`: **[新增]** 最大选课人数
+
+### 5. 成绩表 (`scores`)
+存储学生成绩。
+*   `id`: 主键
+*   `coursePlanId`: 关联开课计划ID
+*   `studentId`: 关联学生ID
+*   `quiz`, `midterm`, `final`: 平时/期中/期末成绩
+*   `total`: 总评成绩
+*   `status`: 状态 (`published`, `unpublished`)
 
 *最后更新时间: 2025-12-15*
