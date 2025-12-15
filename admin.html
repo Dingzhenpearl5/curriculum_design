@@ -198,6 +198,7 @@
                         <tr>
                             <th class="sortable" onclick="handleSort('class-table', 'id')">ID <i class="bi bi-arrow-down-up"></i></th>
                             <th>班级名称</th>
+                            <th>班级人数</th>
                             <th>操作</th>
                         </tr>
                     </thead>
@@ -951,6 +952,35 @@
                             <th>期末成绩</th>
                             <th>总评</th>
                             <th>异常检测</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Class Students Modal -->
+<div class="modal fade" id="classStudentsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="classStudentsModalLabel">班级学生列表</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <table class="table table-striped table-hover" id="class-students-table">
+                    <thead>
+                        <tr>
+                            <th>学号</th>
+                            <th>姓名</th>
+                            <th>性别</th>
+                            <th>生源地</th>
+                            <th>联系电话</th>
                         </tr>
                     </thead>
                     <tbody></tbody>
