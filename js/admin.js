@@ -9,6 +9,13 @@ let currentPlans = [];
 let currentUsers = [];
 let currentScores = [];
 
+// 排序状态
+let sortState = {
+    tableId: null,
+    field: null,
+    direction: 'asc' // 'asc' or 'desc'
+};
+
 // Bootstrap Modal 实例
 let classModal, courseModal, planModal, scoreDetailModal, studentModal, teacherModal;
 
@@ -21,38 +28,141 @@ document.addEventListener('DOMContentLoaded', () => {
     studentModal = new bootstrap.Modal(document.getElementById('studentModal'));
     teacherModal = new bootstrap.Modal(document.getElementById('teacherModal'));
 
-    // 绑定导航事件
-    document.querySelectorAll('.sidebar .nav-link').forEach(link => {
+    // 绑定导航事件 (Navbar & Dashboard Cards)
+    const handleNavigation = (targetId) => {
+        if (!targetId) return;
+
+        // 1. 切换内容区域
+        document.querySelectorAll('.content-section').forEach(section => {
+            section.style.display = 'none';
+        });
+        
+        const targetSection = document.getElementById(targetId);
+        if (targetSection) {
+            targetSection.style.display = 'block';
+        }
+
+        // 2. 更新 Navbar 激活状态
+        document.querySelectorAll('.navbar-nav .nav-link').forEach(l => l.classList.remove('active'));
+        
+        // 尝试找到对应的 nav-link
+        const activeLink = document.querySelector(`.navbar-nav .nav-link[data-target="${targetId}"]`);
+        if (activeLink) {
+            activeLink.classList.add('active');
+            // 如果在下拉菜单中，也激活父级
+            const parentDropdown = activeLink.closest('.dropdown');
+            if (parentDropdown) {
+                parentDropdown.querySelector('.dropdown-toggle').classList.add('active');
+            }
+        }
+
+        // 3. 重新加载数据
+        loadAllData();
+    };
+
+    // 绑定 Navbar 链接 (包括下拉菜单项) 和 返回按钮
+    document.querySelectorAll('.navbar-nav .nav-link, .navbar-brand, .dropdown-item, button[data-target]').forEach(link => {
         link.addEventListener('click', (e) => {
             const targetLink = e.currentTarget;
-            
             if (targetLink.classList.contains('disabled')) return;
-            if (targetLink.hasAttribute('data-bs-toggle')) return;
+            if (targetLink.hasAttribute('data-bs-toggle')) return; // 忽略下拉菜单开关
 
             e.preventDefault();
-            
             const targetId = targetLink.getAttribute('data-target');
-            if (!targetId) return;
+            handleNavigation(targetId);
+        });
+    });
 
-            document.querySelectorAll('.sidebar .nav-link').forEach(l => l.classList.remove('active'));
-            targetLink.classList.add('active');
-
-            document.querySelectorAll('.content-section').forEach(section => {
-                section.style.display = 'none';
-            });
-            
-            const targetSection = document.getElementById(targetId);
-            if (targetSection) {
-                targetSection.style.display = 'block';
-            }
-
-            loadAllData();
+    // 绑定仪表盘卡片
+    document.querySelectorAll('.dashboard-card').forEach(card => {
+        card.addEventListener('click', (e) => {
+            const targetId = e.currentTarget.getAttribute('data-target');
+            handleNavigation(targetId);
         });
     });
 
     // 初始加载
     loadAllData();
 });
+
+/**
+ * 处理表格排序
+ * @param {string} tableId 表格ID
+ * @param {string} field 排序字段
+ */
+function handleSort(tableId, field) {
+    if (sortState.tableId === tableId && sortState.field === field) {
+        // 切换排序方向
+        sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+        // 新的排序字段
+        sortState.tableId = tableId;
+        sortState.field = field;
+        sortState.direction = 'asc';
+    }
+
+    // 根据表格ID重新渲染
+    if (tableId === 'class-table') {
+        renderClasses();
+    } else if (tableId === 'student-table') {
+        renderStudents();
+    } else if (tableId === 'score-audit-table') {
+        renderScoreAudit();
+    }
+}
+
+/**
+ * 导出所有成绩
+ */
+function exportAllScores() {
+    // 简单的 CSV 导出实现
+    const headers = ['课程', '教师', '学生学号', '学生姓名', '平时成绩', '期中成绩', '期末成绩', '总评成绩'];
+    const rows = [];
+
+    currentScores.forEach(score => {
+        const plan = currentPlans.find(p => p.id === score.coursePlanId);
+        const courseName = plan ? getCourseName(plan.courseId) : '未知课程';
+        const teacherName = plan ? getUserName(plan.teacherId) : '未知教师';
+        const studentName = getUserName(score.studentId);
+        const studentNo = getUserName(score.studentId, 'username');
+
+        rows.push([
+            courseName,
+            teacherName,
+            studentNo,
+            studentName,
+            score.quiz || 0,
+            score.midterm || 0,
+            score.final || 0,
+            score.total || 0
+        ]);
+    });
+
+    let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; // 添加 BOM 防止乱码
+    csvContent += headers.join(",") + "\r\n";
+    rows.forEach(row => {
+        csvContent += row.join(",") + "\r\n";
+    });
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "all_scores_export.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+/**
+ * 退出登录
+ */
+function logout() {
+    if (confirm('确定要退出登录吗？')) {
+        // 清除 session 或 token (如果有)
+        // 这里简单跳转回登录页
+        window.location.href = 'index.html';
+    }
+}
 
 /**
  * 加载所有数据并渲染当前视图
@@ -84,7 +194,23 @@ async function loadAllData() {
 function renderClasses() {
     const tbody = document.querySelector('#class-table tbody');
     if (!tbody) return;
-    tbody.innerHTML = currentClasses.map(cls => `
+
+    let displayData = [...currentClasses];
+
+    // 处理排序
+    if (sortState.tableId === 'class-table' && sortState.field) {
+        displayData.sort((a, b) => {
+            let valA = a[sortState.field];
+            let valB = b[sortState.field];
+
+            // 简单的字符串/数字比较
+            if (valA < valB) return sortState.direction === 'asc' ? -1 : 1;
+            if (valA > valB) return sortState.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }
+
+    tbody.innerHTML = displayData.map(cls => `
         <tr>
             <td>${cls.id}</td>
             <td>${cls.name}</td>
@@ -142,14 +268,49 @@ async function deleteClass(id) {
 // 学生管理
 // ==========================================
 
+function handleStudentSearch() {
+    const input = document.getElementById('studentSearch');
+    if (!input.value.trim()) {
+        input.classList.add('is-invalid');
+        return;
+    }
+    input.classList.remove('is-invalid');
+    renderStudents();
+}
+
 function renderStudents() {
     const tbody = document.querySelector('#student-table tbody');
     if (!tbody) return;
     const students = currentUsers.filter(u => u.role === 'student');
     
     // 简单的搜索过滤
-    const search = document.getElementById('studentSearch')?.value.toLowerCase() || '';
-    const filtered = students.filter(s => s.name.toLowerCase().includes(search) || s.username.toLowerCase().includes(search));
+    const searchInput = document.getElementById('studentSearch');
+    // 只有当输入框没有 invalid 状态时才进行过滤，或者如果为空但没有触发搜索（初始加载）则不过滤
+    // 但为了简单起见，我们直接读取值。如果用户清空了输入框并点击搜索，会显示 invalid，不会走到这里（如果通过按钮触发）。
+    // 但 renderStudents 也会被 loadAllData 调用。
+    // 策略：如果输入框为空，则显示所有。
+    const search = searchInput?.value.trim().toLowerCase() || '';
+    
+    let filtered = students.filter(s => s.name.toLowerCase().includes(search) || s.username.toLowerCase().includes(search));
+
+    // 处理排序
+    if (sortState.tableId === 'student-table' && sortState.field) {
+        filtered.sort((a, b) => {
+            let valA, valB;
+
+            if (sortState.field === 'className') {
+                valA = getClassName(a.classId);
+                valB = getClassName(b.classId);
+            } else {
+                valA = a[sortState.field];
+                valB = b[sortState.field];
+            }
+
+            if (valA < valB) return sortState.direction === 'asc' ? -1 : 1;
+            if (valA > valB) return sortState.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }
 
     tbody.innerHTML = filtered.map(stu => `
         <tr>
@@ -556,3 +717,27 @@ function getCourseName(id) {
 function getUserName(id, field = 'name') {
     return currentUsers.find(u => u.id === id)?.[field] || '未知用户';
 }
+
+// 显式暴露给全局作用域 (防止某些环境下的作用域问题)
+window.handleSort = handleSort;
+window.exportAllScores = exportAllScores;
+window.logout = logout;
+window.handleStudentSearch = handleStudentSearch;
+window.openClassModal = openClassModal;
+window.deleteClass = deleteClass;
+window.saveClass = saveClass;
+window.openStudentModal = openStudentModal;
+window.deleteUser = deleteUser;
+window.saveStudent = saveStudent;
+window.openTeacherModal = openTeacherModal;
+window.saveTeacher = saveTeacher;
+window.openCourseModal = openCourseModal;
+window.deleteCourse = deleteCourse;
+window.saveCourse = saveCourse;
+window.openPlanModal = openPlanModal;
+window.deletePlan = deletePlan;
+window.savePlan = savePlan;
+window.viewScoreDetails = viewScoreDetails;
+window.publishScore = publishScore;
+
+console.log('Admin script loaded successfully.');
