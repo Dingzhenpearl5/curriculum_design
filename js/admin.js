@@ -1054,9 +1054,6 @@ function checkConflict(currentId, semester, classroom, teacherId, days, slots, w
 // --- 课表预览逻辑 ---
 
 function renderSchedule() {
-    // 默认调用整体课表
-    renderOverallSchedule();
-    
     // 初始化下拉框
     const semesterSelect = document.getElementById('scheduleSemesterSelect');
     const teacherSemesterSelect = document.getElementById('teacherScheduleSemester');
@@ -1080,6 +1077,9 @@ function renderSchedule() {
         teacherSelect.innerHTML = '<option value="">请选择...</option>' + 
             teachers.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
     }
+
+    // 渲染整体课表 (确保在下拉框初始化之后)
+    renderOverallSchedule();
 }
 
 function renderOverallSchedule() {
