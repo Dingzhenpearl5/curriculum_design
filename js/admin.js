@@ -681,69 +681,260 @@ async function deleteCourse(id) {
 }
 
 // ==========================================
-// 开课计划
+// 开课计划与排课管理 (Refactored)
 // ==========================================
+
+// 状态管理
+let planState = {
+    currentPage: 1,
+    itemsPerPage: 10,
+    filters: {
+        search: '',
+        semester: '',
+        teacherId: ''
+    }
+};
 
 function renderPlans() {
     const tbody = document.querySelector('#plan-table tbody');
     if (!tbody) return;
-    tbody.innerHTML = currentPlans.map(p => `
+
+    // 1. 获取过滤条件
+    const searchInput = document.getElementById('planSearchInput');
+    const semesterSelect = document.getElementById('planFilterSemester');
+    const teacherSelect = document.getElementById('planFilterTeacher');
+
+    planState.filters.search = searchInput ? searchInput.value.trim().toLowerCase() : '';
+    planState.filters.semester = semesterSelect ? semesterSelect.value : '';
+    planState.filters.teacherId = teacherSelect ? teacherSelect.value : '';
+
+    // 2. 过滤数据
+    let filtered = currentPlans.filter(p => {
+        const courseName = getCourseName(p.courseId).toLowerCase();
+        const teacherName = getUserName(p.teacherId).toLowerCase();
+        const classroom = p.classroom.toLowerCase();
+        const search = planState.filters.search;
+
+        const matchSearch = !search || courseName.includes(search) || teacherName.includes(search) || classroom.includes(search);
+        const matchSemester = !planState.filters.semester || p.semester === planState.filters.semester;
+        const matchTeacher = !planState.filters.teacherId || p.teacherId === planState.filters.teacherId;
+
+        return matchSearch && matchSemester && matchTeacher;
+    });
+
+    // 3. 排序 (复用全局 sortState)
+    if (sortState.tableId === 'plan-table' && sortState.field) {
+        filtered.sort((a, b) => {
+            let valA, valB;
+            if (sortState.field === 'courseName') valA = getCourseName(a.courseId);
+            else if (sortState.field === 'teacherName') valA = getUserName(a.teacherId);
+            else valA = a[sortState.field];
+
+            if (sortState.field === 'courseName') valB = getCourseName(b.courseId);
+            else if (sortState.field === 'teacherName') valB = getUserName(b.teacherId);
+            else valB = b[sortState.field];
+
+            if (valA < valB) return sortState.direction === 'asc' ? -1 : 1;
+            if (valA > valB) return sortState.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }
+
+    // 4. 更新统计
+    const badge = document.getElementById('planCountBadge');
+    if (badge) badge.textContent = `共 ${filtered.length} 条`;
+
+    // 5. 分页
+    const totalPages = Math.ceil(filtered.length / planState.itemsPerPage);
+    if (planState.currentPage > totalPages) planState.currentPage = totalPages || 1;
+    
+    const start = (planState.currentPage - 1) * planState.itemsPerPage;
+    const end = start + planState.itemsPerPage;
+    const pageData = filtered.slice(start, end);
+
+    // 6. 渲染表格
+    tbody.innerHTML = pageData.map((p, index) => `
         <tr>
+            <td class="ps-4">${start + index + 1}</td>
             <td>${getCourseName(p.courseId)}</td>
             <td>${getUserName(p.teacherId)}</td>
-            <td>${p.semester}</td>
+            <td><span class="badge bg-light text-dark border">${p.semester}</span></td>
             <td>${p.classroom}</td>
-            <td>${p.timeSlots}</td>
-            <td>
-                <button class="btn btn-sm btn-outline-primary" onclick="openPlanModal('${p.id}')">编辑</button>
-                <button class="btn btn-sm btn-outline-danger" onclick="deletePlan('${p.id}')">删除</button>
+            <td>${formatTimeSlots(p.timeSlots)}</td>
+            <td class="text-end pe-4">
+                <button class="btn btn-sm btn-outline-primary me-1" onclick="openPlanModal('${p.id}')" title="编辑">
+                    <i class="bi bi-pencil"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deletePlan('${p.id}')" title="删除">
+                    <i class="bi bi-trash"></i>
+                </button>
             </td>
         </tr>
     `).join('');
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">暂无数据</td></tr>';
+    }
+
+    // 7. 渲染分页控件
+    renderPagination('planPagination', totalPages, planState.currentPage, (page) => {
+        planState.currentPage = page;
+        renderPlans();
+    });
+
+    // 8. 更新下拉选项 (仅在初始化或数据变化时)
+    updatePlanFilterOptions();
 }
+
+function updatePlanFilterOptions() {
+    const semesterSelect = document.getElementById('planFilterSemester');
+    const teacherSelect = document.getElementById('planFilterTeacher');
+    
+    if (!semesterSelect || !teacherSelect) return;
+
+    // 保持当前选中值
+    const currentSemester = semesterSelect.value;
+    const currentTeacher = teacherSelect.value;
+
+    // 提取所有学期
+    const semesters = [...new Set(currentPlans.map(p => p.semester))].sort().reverse();
+    semesterSelect.innerHTML = '<option value="">所有学期</option>' + 
+        semesters.map(s => `<option value="${s}">${s}</option>`).join('');
+    semesterSelect.value = currentSemester;
+
+    // 提取所有教师
+    const teachers = currentUsers.filter(u => u.role === 'teacher');
+    teacherSelect.innerHTML = '<option value="">所有教师</option>' + 
+        teachers.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+    teacherSelect.value = currentTeacher;
+}
+
+function renderPagination(elementId, totalPages, currentPage, onPageChange) {
+    const container = document.getElementById(elementId);
+    if (!container) return;
+    
+    if (totalPages <= 1) {
+        container.innerHTML = '';
+        return;
+    }
+
+    let html = '';
+    // Prev
+    html += `<li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+        <a class="page-link" href="#" onclick="event.preventDefault(); ${currentPage > 1 ? `window.changePage('${elementId}', ${currentPage - 1})` : ''}">上一页</a>
+    </li>`;
+
+    // Pages
+    for (let i = 1; i <= totalPages; i++) {
+        html += `<li class="page-item ${currentPage === i ? 'active' : ''}">
+            <a class="page-link" href="#" onclick="event.preventDefault(); window.changePage('${elementId}', ${i})">${i}</a>
+        </li>`;
+    }
+
+    // Next
+    html += `<li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+        <a class="page-link" href="#" onclick="event.preventDefault(); ${currentPage < totalPages ? `window.changePage('${elementId}', ${currentPage + 1})` : ''}">下一页</a>
+    </li>`;
+
+    container.innerHTML = html;
+
+    // 挂载全局回调
+    window.changePage = (id, page) => {
+        if (id === 'planPagination') {
+            planState.currentPage = page;
+            renderPlans();
+        }
+    };
+}
+
+// --- 模态框逻辑 ---
 
 function openPlanModal(id = null) {
     const form = document.getElementById('planForm');
     form.reset();
     document.getElementById('planId').value = '';
+    document.getElementById('conflictAlert').classList.add('d-none');
     
     // 填充下拉框
-    form.elements['courseId'].innerHTML = currentCourses.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-    form.elements['teacherId'].innerHTML = currentUsers.filter(u => u.role === 'teacher').map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+    const courseSelect = document.getElementById('planCourseId');
+    const teacherSelect = document.getElementById('planTeacherId');
+    
+    courseSelect.innerHTML = '<option value="" disabled selected>请选择课程</option>' + 
+        currentCourses.map(c => `<option value="${c.id}">${c.name} (${c.code})</option>`).join('');
+    
+    teacherSelect.innerHTML = '<option value="" disabled selected>请选择教师</option>' + 
+        currentUsers.filter(u => u.role === 'teacher').map(t => `<option value="${t.id}">${t.name}</option>`).join('');
 
     if (id) {
         const p = currentPlans.find(x => x.id === id);
         if (p) {
             document.getElementById('planId').value = p.id;
-            form.elements['courseId'].value = p.courseId;
-            form.elements['teacherId'].value = p.teacherId;
-            form.elements['semester'].value = p.semester;
-            form.elements['classroom'].value = p.classroom;
+            courseSelect.value = p.courseId;
+            teacherSelect.value = p.teacherId;
+            document.getElementById('planSemester').value = p.semester;
+            document.getElementById('planClassroom').value = p.classroom;
+            document.getElementById('planMaxStudents').value = p.maxStudents || 50;
             
-            const [day, slot] = p.timeSlots.split(' ');
-            form.elements['day'].value = day;
-            form.elements['slot'].value = slot;
+            // 解析并填充 Checkbox
+            // 假设格式: "周一,周三 1-2节,3-4节 (全周)" 或 简单格式 "周一 1-2节"
+            // 这里我们需要一个解析函数，或者如果数据是简单格式，我们尝试解析
+            parseAndFillTimeSlots(p.timeSlots, p.weekType);
             
-            document.getElementById('planModalLabel').textContent = '编辑计划';
+            document.getElementById('planModalLabel').innerHTML = '<i class="bi bi-pencil-square me-2"></i>编辑开课计划';
         }
     } else {
-        form.elements['semester'].value = '2024-2025-1';
-        document.getElementById('planModalLabel').textContent = '新增计划';
+        document.getElementById('planSemester').value = '2024-2025-1';
+        document.getElementById('planModalLabel').innerHTML = '<i class="bi bi-calendar-plus me-2"></i>新增开课计划';
     }
     planModal.show();
 }
 
 async function savePlan() {
     const form = document.getElementById('planForm');
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+    }
+
     const id = document.getElementById('planId').value;
-    
+    const courseId = document.getElementById('planCourseId').value;
+    const teacherId = document.getElementById('planTeacherId').value;
+    const semester = document.getElementById('planSemester').value;
+    const classroom = document.getElementById('planClassroom').value;
+    const maxStudents = document.getElementById('planMaxStudents').value;
+
+    // 获取 Checkbox 值
+    const days = Array.from(document.querySelectorAll('input[name="planDay"]:checked')).map(cb => cb.value);
+    const slots = Array.from(document.querySelectorAll('input[name="planSlot"]:checked')).map(cb => cb.value);
+    const weekType = document.querySelector('input[name="weekType"]:checked').value;
+
+    if (days.length === 0 || slots.length === 0) {
+        alert('请至少选择一个上课星期和一节课');
+        return;
+    }
+
+    // 构造 timeSlots 字符串 (用于显示和简单存储)
+    // 格式: "周一,周三 1,2节 (全周)"
+    const timeSlotsStr = `${days.join(',')} ${slots.join(',')}节`;
+
+    // 冲突检测
+    const conflict = checkConflict(id, semester, classroom, teacherId, days, slots, weekType);
+    if (conflict) {
+        const alertBox = document.getElementById('conflictAlert');
+        document.getElementById('conflictMsg').textContent = conflict;
+        alertBox.classList.remove('d-none');
+        return;
+    }
+
     const plan = {
         id: id || generateId('plan_'),
-        courseId: form.elements['courseId'].value,
-        teacherId: form.elements['teacherId'].value,
-        semester: form.elements['semester'].value,
-        classroom: form.elements['classroom'].value,
-        timeSlots: `${form.elements['day'].value} ${form.elements['slot'].value}`
+        courseId,
+        teacherId,
+        semester,
+        classroom,
+        timeSlots: timeSlotsStr,
+        weekType, // 新增字段存储周类型
+        maxStudents: parseInt(maxStudents)
     };
 
     await db.put(STORAGE_KEYS.COURSE_PLANS, plan);
@@ -758,32 +949,223 @@ async function deletePlan(id) {
     }
 }
 
+// --- 辅助函数 ---
+
+function formatTimeSlots(str) {
+    // 简单美化显示
+    return str.replace(/,/g, '、');
+}
+
+function parseAndFillTimeSlots(timeSlotsStr, weekTypeVal) {
+    // 重置所有 Checkbox
+    document.querySelectorAll('input[name="planDay"]').forEach(cb => cb.checked = false);
+    document.querySelectorAll('input[name="planSlot"]').forEach(cb => cb.checked = false);
+    
+    if (!timeSlotsStr) return;
+
+    // 尝试解析 "周一,周三 1,2节"
+    const parts = timeSlotsStr.split(' ');
+    if (parts.length >= 2) {
+        const daysPart = parts[0]; // "周一,周三"
+        const slotsPart = parts[1]; // "1,2节" or "1-2节"
+
+        daysPart.split(',').forEach(d => {
+            const cb = document.querySelector(`input[name="planDay"][value="${d}"]`);
+            if (cb) cb.checked = true;
+        });
+
+        // 处理节次: 支持 "1,2节" 和 "1-2节"
+        let slots = [];
+        if (slotsPart.includes('-')) {
+            // "1-2节" -> [1, 2]
+            const range = slotsPart.replace('节', '').split('-');
+            const start = parseInt(range[0]);
+            const end = parseInt(range[1]);
+            for (let i = start; i <= end; i++) slots.push(i.toString());
+        } else {
+            // "1,2节" -> [1, 2]
+            slots = slotsPart.replace('节', '').split(',');
+        }
+
+        slots.forEach(s => {
+            const cb = document.querySelector(`input[name="planSlot"][value="${s}"]`);
+            if (cb) cb.checked = true;
+        });
+    }
+
+    // 周类型
+    if (weekTypeVal) {
+        const radio = document.querySelector(`input[name="weekType"][value="${weekTypeVal}"]`);
+        if (radio) radio.checked = true;
+    }
+}
+
+function checkConflict(currentId, semester, classroom, teacherId, days, slots, weekType) {
+    // 简单的冲突检测逻辑
+    for (const p of currentPlans) {
+        if (p.id === currentId) continue; // 跳过自己
+        if (p.semester !== semester) continue; // 不同学期不冲突
+
+        // 解析现有计划的时间
+        // 假设现有数据格式可能不统一，这里做简单处理
+        // 如果是旧数据 "周一 1-2节"，我们需要解析它
+        const pDays = p.timeSlots.split(' ')[0].split(',');
+        const pSlotsStr = p.timeSlots.split(' ')[1].replace('节', '');
+        let pSlots = [];
+        if (pSlotsStr.includes('-')) {
+            const [s, e] = pSlotsStr.split('-').map(Number);
+            for (let i = s; i <= e; i++) pSlots.push(i.toString());
+        } else {
+            pSlots = pSlotsStr.split(',');
+        }
+
+        // 检查时间重叠
+        const dayOverlap = days.some(d => pDays.includes(d));
+        const slotOverlap = slots.some(s => pSlots.includes(s));
+        
+        // 周类型重叠 (简单处理：如果都不是 'all' 且不同，则不冲突；否则冲突)
+        // all vs odd -> conflict
+        // odd vs even -> no conflict
+        const pWeekType = p.weekType || 'all';
+        let weekOverlap = true;
+        if (weekType !== 'all' && pWeekType !== 'all' && weekType !== pWeekType) {
+            weekOverlap = false;
+        }
+
+        if (dayOverlap && slotOverlap && weekOverlap) {
+            if (p.classroom === classroom) {
+                return `教室冲突：${p.classroom} 在该时间段已有课程 (${getCourseName(p.courseId)})`;
+            }
+            if (p.teacherId === teacherId) {
+                return `教师冲突：该教师在该时间段已有课程 (${getCourseName(p.courseId)})`;
+            }
+        }
+    }
+    return null;
+}
+
+// --- 课表预览逻辑 ---
+
 function renderSchedule() {
-    const days = ['周一', '周二', '周三', '周四', '周五'];
-    const slots = ['1-2节', '3-4节', '5-6节', '7-8节'];
-    const tbody = document.querySelector('.schedule-table tbody');
+    // 默认调用整体课表
+    renderOverallSchedule();
+    
+    // 初始化下拉框
+    const semesterSelect = document.getElementById('scheduleSemesterSelect');
+    const teacherSemesterSelect = document.getElementById('teacherScheduleSemester');
+    const teacherSelect = document.getElementById('teacherScheduleSelect');
+    
+    if (semesterSelect && semesterSelect.options.length === 0) {
+        const semesters = [...new Set(currentPlans.map(p => p.semester))].sort().reverse();
+        const opts = semesters.map(s => `<option value="${s}">${s}</option>`).join('');
+        semesterSelect.innerHTML = opts;
+        teacherSemesterSelect.innerHTML = opts;
+        
+        // 默认选中第一个
+        if (semesters.length > 0) {
+            semesterSelect.value = semesters[0];
+            teacherSemesterSelect.value = semesters[0];
+        }
+    }
+    
+    if (teacherSelect && teacherSelect.options.length <= 1) {
+        const teachers = currentUsers.filter(u => u.role === 'teacher');
+        teacherSelect.innerHTML = '<option value="">请选择...</option>' + 
+            teachers.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+    }
+}
+
+function renderOverallSchedule() {
+    const semester = document.getElementById('scheduleSemesterSelect').value;
+    const tbody = document.querySelector('#overall-schedule-table tbody');
     if (!tbody) return;
 
-    tbody.innerHTML = slots.map(slot => `
-        <tr>
-            <td class="table-light fw-bold">${slot}</td>
-            ${days.map(day => {
-                const plan = currentPlans.find(p => p.timeSlots === `${day} ${slot}` && p.semester === '2024-2025-1');
-                if (plan) {
-                    return `
-                        <td>
-                            <div class="schedule-cell">
-                                <strong>${getCourseName(plan.courseId)}</strong><br>
-                                <small>${getUserName(plan.teacherId)}</small><br>
-                                <small>@${plan.classroom}</small>
+    renderScheduleGrid(tbody, currentPlans.filter(p => p.semester === semester));
+}
+
+function renderTeacherSchedule() {
+    const semester = document.getElementById('teacherScheduleSemester').value;
+    const teacherId = document.getElementById('teacherScheduleSelect').value;
+    const tbody = document.querySelector('#teacher-schedule-table tbody');
+    const title = document.getElementById('teacherScheduleTitle');
+    
+    if (!teacherId) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-5 text-muted">请选择教师查看课表</td></tr>';
+        title.textContent = '请选择教师查看课表';
+        return;
+    }
+
+    title.textContent = `${getUserName(teacherId)} - 课表预览`;
+    const plans = currentPlans.filter(p => p.semester === semester && p.teacherId === teacherId);
+    renderScheduleGrid(tbody, plans);
+}
+
+function renderScheduleGrid(tbody, plans) {
+    const days = ['周一', '周二', '周三', '周四', '周五'];
+    const slots = [1, 2, 3, 4, 5, 6, 7, 8]; // 8节课
+    
+    let html = '';
+    
+    // 2节课为一组显示，或者每节课一行？通常大学课表是2节一组或1节一行。
+    // 为了简化，我们按 1-2, 3-4, 5-6, 7-8 显示，如果计划是单节的，可能会显示不准。
+    // 但我们的输入支持单节。为了准确，我们按 1,2,3,4... 8行显示？太长了。
+    // 让我们按 "大节" (Section) 显示： 第1-2节, 第3-4节...
+    // 如果有课程只占第1节，它会显示在 1-2节 的格子里。
+    
+    const sections = [
+        { name: '第1-2节', slots: ['1', '2'] },
+        { name: '第3-4节', slots: ['3', '4'] },
+        { name: '第5-6节', slots: ['5', '6'] },
+        { name: '第7-8节', slots: ['7', '8'] }
+    ];
+
+    html = sections.map(section => {
+        return `
+            <tr>
+                <td class="table-light fw-bold align-middle">${section.name}</td>
+                ${days.map(day => {
+                    // 查找在该天、该大节内有课的计划
+                    // 只要计划的 slots 与 section.slots 有交集
+                    const cellPlans = plans.filter(p => {
+                        const pDays = p.timeSlots.split(' ')[0].split(',');
+                        const pSlotsStr = p.timeSlots.split(' ')[1].replace('节', '');
+                        let pSlots = [];
+                        if (pSlotsStr.includes('-')) {
+                            const [s, e] = pSlotsStr.split('-').map(Number);
+                            for (let i = s; i <= e; i++) pSlots.push(i.toString());
+                        } else {
+                            pSlots = pSlotsStr.split(',');
+                        }
+                        
+                        const dayMatch = pDays.includes(day);
+                        const slotMatch = section.slots.some(s => pSlots.includes(s));
+                        return dayMatch && slotMatch;
+                    });
+
+                    if (cellPlans.length > 0) {
+                        const isConflict = cellPlans.length > 1; // 简单判断：同一格有多个课
+                        // 注意：如果是整体课表，同一格有多个课是正常的（不同教室）。
+                        // 只有当 教室相同 或 教师相同 时才是冲突。
+                        // 但在格子显示里，我们列出所有。
+                        
+                        const content = cellPlans.map(p => `
+                            <div class="mb-1 pb-1 border-bottom border-light-subtle last-no-border">
+                                <div class="fw-bold small">${getCourseName(p.courseId)}</div>
+                                <div class="small">${getUserName(p.teacherId)}</div>
+                                <div class="small badge bg-secondary bg-opacity-10 text-dark">@${p.classroom}</div>
                             </div>
-                        </td>
-                    `;
-                }
-                return '<td></td>';
-            }).join('')}
-        </tr>
-    `).join('');
+                        `).join('');
+                        
+                        return `<td class="align-middle ${isConflict ? '' : ''}"><div class="schedule-cell text-start">${content}</div></td>`;
+                    } else {
+                        return '<td></td>';
+                    }
+                }).join('')}
+            </tr>
+        `;
+    }).join('');
+
+    tbody.innerHTML = html;
 }
 
 // ==========================================

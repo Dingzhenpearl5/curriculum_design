@@ -452,53 +452,166 @@
         </div>
     </div>
 
-    <!-- 5. 开课计划 -->
+    <!-- 5. 开课计划与排课管理 -->
     <div id="plan-section" class="content-section" style="display: none;">
+        <!-- 顶部操作区 -->
         <div class="d-flex justify-content-between align-items-center mb-3">
             <div class="d-flex align-items-center">
                 <button class="btn btn-outline-secondary me-3" data-target="dashboard-section">
                     <i class="bi bi-arrow-left"></i> 返回
                 </button>
-                <h2 class="mb-0"><i class="bi bi-calendar-week me-2"></i>开课计划管理</h2>
+                <h2 class="mb-0"><i class="bi bi-calendar-week me-2"></i>开课计划与排课管理</h2>
             </div>
-            <button class="btn btn-primary" onclick="openPlanModal()">+ 新增开课计划</button>
+            <button class="btn btn-success" onclick="openPlanModal()">
+                <i class="bi bi-plus-lg"></i> 新增开课计划
+            </button>
         </div>
         
-        <div class="card mb-4">
-            <div class="card-header">计划列表</div>
-            <div class="card-body">
-                <table class="table table-hover" id="plan-table">
-                    <thead>
-                        <tr>
-                            <th>课程</th>
-                            <th>授课教师</th>
-                            <th>学期</th>
-                            <th>教室</th>
-                            <th>上课时间</th>
-                            <th>操作</th>
-                        </tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
+        <!-- 搜索与过滤区 -->
+        <div class="card mb-4 shadow-sm">
+            <div class="card-body py-3">
+                <div class="row g-3 align-items-center">
+                    <div class="col-md-4">
+                        <div class="input-group">
+                            <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
+                            <input type="text" class="form-control" id="planSearchInput" placeholder="搜索课程、教师或教室...">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-select" id="planFilterSemester">
+                            <option value="">所有学期</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-select" id="planFilterTeacher">
+                            <option value="">所有教师</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-primary w-100" onclick="renderPlans()">
+                            <i class="bi bi-funnel"></i> 筛选
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div class="card">
-            <div class="card-header">本学期课表预览 (2024-2025-1)</div>
+        <!-- 开课计划列表 -->
+        <div class="card mb-4 shadow-sm">
+            <div class="card-header bg-white py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 text-primary"><i class="bi bi-list-ul me-2"></i>计划列表</h5>
+                    <span class="badge bg-secondary" id="planCountBadge">共 0 条</span>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped mb-0 align-middle" id="plan-table">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-4">#</th>
+                                <th class="sortable" onclick="handleSort('plan-table', 'courseName')">课程 <i class="bi bi-arrow-down-up text-muted small"></i></th>
+                                <th class="sortable" onclick="handleSort('plan-table', 'teacherName')">授课教师 <i class="bi bi-arrow-down-up text-muted small"></i></th>
+                                <th class="sortable" onclick="handleSort('plan-table', 'semester')">学期 <i class="bi bi-arrow-down-up text-muted small"></i></th>
+                                <th>教室</th>
+                                <th>上课时间</th>
+                                <th class="text-end pe-4">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card-footer bg-white py-3">
+                <nav aria-label="Page navigation">
+                    <ul class="pagination justify-content-end mb-0" id="planPagination"></ul>
+                </nav>
+            </div>
+        </div>
+
+        <!-- 课表预览区 -->
+        <div class="card shadow-sm">
+            <div class="card-header bg-white">
+                <ul class="nav nav-tabs card-header-tabs" id="scheduleTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="overall-tab" data-bs-toggle="tab" data-bs-target="#overall-schedule" type="button" role="tab">
+                            <i class="bi bi-grid-3x3 me-2"></i>整体课表视图
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="teacher-tab" data-bs-toggle="tab" data-bs-target="#teacher-schedule" type="button" role="tab">
+                            <i class="bi bi-person-video3 me-2"></i>教师个人课表
+                        </button>
+                    </li>
+                </ul>
+            </div>
             <div class="card-body">
-                <table class="table table-bordered schedule-table" id="schedule-table">
-                    <thead>
-                        <tr class="table-light">
-                            <th>节次 / 星期</th>
-                            <th>周一</th>
-                            <th>周二</th>
-                            <th>周三</th>
-                            <th>周四</th>
-                            <th>周五</th>
-                        </tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
+                <div class="tab-content" id="scheduleTabContent">
+                    <!-- Tab 1: 整体课表 -->
+                    <div class="tab-pane fade show active" id="overall-schedule" role="tabpanel">
+                        <div class="d-flex justify-content-end mb-3">
+                            <div class="d-flex align-items-center">
+                                <label class="me-2 fw-bold">学期：</label>
+                                <select class="form-select form-select-sm" id="scheduleSemesterSelect" style="width: 200px;" onchange="renderOverallSchedule()">
+                                    <!-- 动态填充 -->
+                                </select>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-bordered schedule-table text-center" id="overall-schedule-table">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 100px;">节次 / 星期</th>
+                                        <th>周一</th>
+                                        <th>周二</th>
+                                        <th>周三</th>
+                                        <th>周四</th>
+                                        <th>周五</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                        <div class="mt-2 small text-muted">
+                            <i class="bi bi-square-fill text-danger me-1"></i> 红色背景表示存在教室或时间冲突
+                        </div>
+                    </div>
+                    
+                    <!-- Tab 2: 教师个人课表 -->
+                    <div class="tab-pane fade" id="teacher-schedule" role="tabpanel">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="mb-0" id="teacherScheduleTitle">请选择教师查看课表</h5>
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="d-flex align-items-center">
+                                    <label class="me-2 fw-bold">学期：</label>
+                                    <select class="form-select form-select-sm" id="teacherScheduleSemester" style="width: 180px;" onchange="renderTeacherSchedule()">
+                                    </select>
+                                </div>
+                                <div class="d-flex align-items-center">
+                                    <label class="me-2 fw-bold">教师：</label>
+                                    <select class="form-select form-select-sm" id="teacherScheduleSelect" style="width: 180px;" onchange="renderTeacherSchedule()">
+                                        <option value="">请选择...</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-bordered schedule-table text-center" id="teacher-schedule-table">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 100px;">节次 / 星期</th>
+                                        <th>周一</th>
+                                        <th>周二</th>
+                                        <th>周三</th>
+                                        <th>周四</th>
+                                        <th>周五</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -668,51 +781,144 @@
 
 <!-- Plan Modal -->
 <div class="modal fade" id="planModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="planModalLabel">编辑开课计划</h5>
+            <div class="modal-header bg-light">
+                <h5 class="modal-title" id="planModalLabel"><i class="bi bi-calendar-plus me-2"></i>编辑开课计划</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <form id="planForm">
                     <input type="hidden" id="planId">
-                    <div class="mb-3">
-                        <label class="form-label" for="planCourseId">选择课程</label>
-                        <select class="form-select" id="planCourseId" name="courseId" required></select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label" for="planTeacherId">授课教师</label>
-                        <select class="form-select" id="planTeacherId" name="teacherId" required></select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label" for="planSemester">学期</label>
-                        <input type="text" class="form-control" id="planSemester" name="semester" value="2024-2025-1" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label" for="planClassroom">教室</label>
-                        <input type="text" class="form-control" id="planClassroom" name="classroom" required>
-                    </div>
-                    <div class="row mb-3">
-                        <label class="form-label">上课时间</label>
-                        <div class="col">
-                            <select class="form-select" id="planDay" name="day">
-                                <option value="周一">周一</option>
-                                <option value="周二">周二</option>
-                                <option value="周三">周三</option>
-                                <option value="周四">周四</option>
-                                <option value="周五">周五</option>
-                            </select>
+                    
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">选择课程 <span class="text-danger">*</span></label>
+                            <select class="form-select" id="planCourseId" name="courseId" required></select>
                         </div>
-                        <div class="col">
-                            <select class="form-select" id="planSlot" name="slot">
-                                <option value="1-2节">1-2节</option>
-                                <option value="3-4节">3-4节</option>
-                                <option value="5-6节">5-6节</option>
-                                <option value="7-8节">7-8节</option>
-                            </select>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">授课教师 <span class="text-danger">*</span></label>
+                            <select class="form-select" id="planTeacherId" name="teacherId" required></select>
                         </div>
                     </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">学期 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="planSemester" name="semester" placeholder="例如: 2024-2025-1" list="semesterOptions" required>
+                            <datalist id="semesterOptions">
+                                <option value="2024-2025-1">
+                                <option value="2024-2025-2">
+                                <option value="2025-2026-1">
+                            </datalist>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">教室 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="planClassroom" name="classroom" placeholder="例如: A101" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">上课时间安排 <span class="text-danger">*</span></label>
+                        <div class="card bg-light border-0">
+                            <div class="card-body">
+                                <!-- 星期选择 -->
+                                <div class="mb-3">
+                                    <label class="form-label small text-muted mb-2">选择星期 (多选)</label>
+                                    <div class="d-flex flex-wrap gap-3" id="planDaysCheckboxes">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="planDay" value="周一" id="dayMon">
+                                            <label class="form-check-label" for="dayMon">周一</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="planDay" value="周二" id="dayTue">
+                                            <label class="form-check-label" for="dayTue">周二</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="planDay" value="周三" id="dayWed">
+                                            <label class="form-check-label" for="dayWed">周三</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="planDay" value="周四" id="dayThu">
+                                            <label class="form-check-label" for="dayThu">周四</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="planDay" value="周五" id="dayFri">
+                                            <label class="form-check-label" for="dayFri">周五</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- 节次选择 -->
+                                <div class="mb-3">
+                                    <label class="form-label small text-muted mb-2">选择节次 (多选)</label>
+                                    <div class="d-flex flex-wrap gap-3" id="planSlotsCheckboxes">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="planSlot" value="1" id="slot1">
+                                            <label class="form-check-label" for="slot1">第1节</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="planSlot" value="2" id="slot2">
+                                            <label class="form-check-label" for="slot2">第2节</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="planSlot" value="3" id="slot3">
+                                            <label class="form-check-label" for="slot3">第3节</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="planSlot" value="4" id="slot4">
+                                            <label class="form-check-label" for="slot4">第4节</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="planSlot" value="5" id="slot5">
+                                            <label class="form-check-label" for="slot5">第5节</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="planSlot" value="6" id="slot6">
+                                            <label class="form-check-label" for="slot6">第6节</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="planSlot" value="7" id="slot7">
+                                            <label class="form-check-label" for="slot7">第7节</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="planSlot" value="8" id="slot8">
+                                            <label class="form-check-label" for="slot8">第8节</label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 周数类型 -->
+                                <div>
+                                    <label class="form-label small text-muted mb-2">周数类型</label>
+                                    <div class="d-flex gap-4">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="weekType" id="weekAll" value="all" checked>
+                                            <label class="form-check-label" for="weekAll">每周</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="weekType" id="weekOdd" value="odd">
+                                            <label class="form-check-label" for="weekOdd">单周</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="weekType" id="weekEven" value="even">
+                                            <label class="form-check-label" for="weekEven">双周</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">最大选课人数</label>
+                        <input type="number" class="form-control" id="planMaxStudents" name="maxStudents" value="50">
+                    </div>
+                    
+                    <div id="conflictAlert" class="alert alert-danger d-none">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i> <span id="conflictMsg">检测到冲突</span>
+                    </div>
+
                 </form>
             </div>
             <div class="modal-footer">
