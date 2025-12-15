@@ -814,7 +814,13 @@ function renderPlans() {
     `).join('');
 
     if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">暂无数据</td></tr>';
+        if (planState.filters.search) {
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-muted">
+                <i class="bi bi-search me-2"></i>没有找到与 "<strong>${planState.filters.search}</strong>" 相关的开课记录
+            </td></tr>`;
+        } else {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">暂无数据</td></tr>';
+        }
     }
 
     // 7. 渲染分页控件
@@ -825,6 +831,22 @@ function renderPlans() {
 
     // 8. 更新下拉选项 (仅在初始化或数据变化时)
     updatePlanFilterOptions();
+}
+
+function handlePlanSearch() {
+    const searchInput = document.getElementById('planSearchInput');
+    if (searchInput && searchInput.value.trim() === '') {
+        // 空搜索提醒：临时修改 placeholder 并闪烁边框
+        const originalPlaceholder = searchInput.placeholder;
+        searchInput.placeholder = '请输入搜索关键词...';
+        searchInput.classList.add('border-warning', 'shadow-sm');
+        
+        setTimeout(() => {
+            searchInput.placeholder = originalPlaceholder;
+            searchInput.classList.remove('border-warning', 'shadow-sm');
+        }, 1500);
+    }
+    renderPlans();
 }
 
 function updatePlanFilterOptions() {
@@ -1427,6 +1449,7 @@ window.handleSort = handleSort;
 window.exportAllScores = exportAllScores;
 window.logout = logout;
 window.handleStudentSearch = handleStudentSearch;
+window.handlePlanSearch = handlePlanSearch;
 window.openClassModal = openClassModal;
 window.viewClassStudents = viewClassStudents;
 window.deleteClass = deleteClass;
