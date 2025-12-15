@@ -21,8 +21,11 @@ const STORAGE_KEYS = {
     COURSES: 'courses',
     COURSE_PLANS: 'plans',
     SCORES: 'scores',
-    DATA_VERSION: 'cms_data_v5_extreme_idb' // 升级版本号
+    DATA_VERSION: 'cms_data_v7_avatar' // 升级版本号
 };
+
+// 默认头像 (SVG Base64)
+const DEFAULT_AVATAR = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMjggMTI4Ij48Y2lyY2xlIGN4PSI2NCIgY3k9IjY0IiByPSI2NCIgZmlsbD0iI2UzZTNUzIiLz48cGF0aCBkPSJNNjQgMzJhMjQgMjQgMCAxIDAgMCA0OCAyNCAyNCAwIDAgMCAwLTQ4em0tNDAgODBhNDAgNDAgMCAwIDEgODAgMHY4SDI0di04eiIgZmlsbD0iI2ZmZiIvPjwvc3ZnPg==';
 
 class DB {
     constructor() {
@@ -157,12 +160,24 @@ async function initData() {
         if (i === 1) name = '张三(波动王)';
         if (i === 2) name = '李四(逆袭王)';
         
+        const gender = Math.random() > 0.5 ? 'male' : 'female';
+        const regions = ['beijing', 'shanghai', 'guangdong', 'zhejiang', 'jiangsu'];
+        const region = regions[Math.floor(Math.random() * regions.length)];
+        const phone = `138${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}8888`;
+        const birthday = `200${Math.floor(Math.random() * 4)}-${Math.floor(Math.random() * 12 + 1).toString().padStart(2, '0')}-${Math.floor(Math.random() * 28 + 1).toString().padStart(2, '0')}`;
+
         users.push({
             id: `stu_${i.toString().padStart(3, '0')}`,
             username: `2021${i.toString().padStart(3, '0')}`,
             name: name,
             role: 'student',
-            classId: i <= 10 ? 'cls_001' : (i <= 20 ? 'cls_002' : 'cls_003')
+            classId: i <= 10 ? 'cls_001' : (i <= 20 ? 'cls_002' : 'cls_003'),
+            gender: gender,
+            email: `student${i}@example.com`,
+            phone: phone,
+            birthday: birthday,
+            region: region,
+            avatar: DEFAULT_AVATAR // 默认头像
         });
     }
 

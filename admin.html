@@ -234,12 +234,13 @@
                 <table class="table table-hover" id="student-table">
                     <thead>
                         <tr>
+                            <th>头像</th>
                             <th class="sortable" onclick="handleSort('student-table', 'username')">学号 <i class="bi bi-arrow-down-up"></i></th>
-                            <th class="sortable" onclick="handleSort('student-table', 'name')">姓名 <i class="bi bi-arrow-down-up"></i></th>
-                            <th class="sortable" onclick="handleSort('student-table', 'gender')">性别 <i class="bi bi-arrow-down-up"></i></th>
-                            <th class="sortable" onclick="handleSort('student-table', 'className')">班级 <i class="bi bi-arrow-down-up"></i></th>
-                            <th class="sortable" onclick="handleSort('student-table', 'phone')">手机 <i class="bi bi-arrow-down-up"></i></th>
-                            <th class="sortable" onclick="handleSort('student-table', 'region')">地区 <i class="bi bi-arrow-down-up"></i></th>
+                            <th>姓名</th>
+                            <th>性别</th>
+                            <th>班级</th>
+                            <th>手机</th>
+                            <th>地区</th>
                             <th>操作</th>
                         </tr>
                     </thead>
@@ -268,6 +269,20 @@
                 <form id="studentEditForm">
                     <input type="hidden" id="editStudentId">
                     
+                    <!-- Avatar -->
+                    <div class="text-center mb-5">
+                        <div class="position-relative d-inline-block">
+                            <div class="rounded-circle border border-3 border-white shadow-sm overflow-hidden bg-light" style="width: 120px; height: 120px;">
+                                <img id="editStudentAvatar" src="" class="w-100 h-100" style="object-fit: cover; object-position: center;" onclick="triggerAvatarUpload()" alt="用户头像">
+                            </div>
+                            <button type="button" class="btn btn-sm btn-primary position-absolute bottom-0 end-0 rounded-circle shadow-sm border-2 border-white" onclick="triggerAvatarUpload()" style="width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; z-index: 10;">
+                                <i class="bi bi-camera-fill"></i>
+                            </button>
+                        </div>
+                        <input type="file" id="avatarInput" hidden accept="image/*" onchange="handleAvatarChange(this)">
+                        <div class="mt-2 text-muted small">点击头像更换图片</div>
+                    </div>
+
                     <!-- Nickname -->
                     <div class="mb-4 row">
                         <label class="col-sm-2 col-form-label fw-bold text-end"><span class="text-danger me-1">*</span>昵称</label>
@@ -314,19 +329,37 @@
                     <!-- Email -->
                     <div class="mb-4 row">
                         <label class="col-sm-2 col-form-label fw-bold text-end">邮箱</label>
-                        <div class="col-sm-8 d-flex align-items-center">
-                            <span class="text-secondary me-3">zhangsan@example.com</span>
-                            <a href="#" class="text-decoration-none text-primary">修改邮箱</a>
+                        <div class="col-sm-8">
+                            <div class="d-flex align-items-center">
+                                <span id="editStudentEmail" class="text-secondary me-3">zhangsan@example.com</span>
+                                <a href="#" class="text-decoration-none text-primary" onclick="toggleEmailEdit()">修改邮箱</a>
+                            </div>
+                            <div id="emailEditRow" class="mt-2" style="display: none;">
+                                <div class="input-group" style="max-width: 300px;">
+                                    <input type="email" class="form-control" id="emailInput" placeholder="输入新邮箱">
+                                    <button class="btn btn-outline-primary" type="button" onclick="confirmEmailEdit()">确定</button>
+                                    <button class="btn btn-outline-secondary" type="button" onclick="cancelEmailEdit()">取消</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
                     <!-- Phone -->
                     <div class="mb-4 row">
                         <label class="col-sm-2 col-form-label fw-bold text-end">手机</label>
-                        <div class="col-sm-8 d-flex align-items-center">
-                            <span class="text-secondary me-3">138****8888</span>
-                            <a href="#" class="text-decoration-none text-primary me-3">修改手机</a>
-                            <a href="#" class="text-decoration-none text-success">解除绑定</a>
+                        <div class="col-sm-8">
+                            <div class="d-flex align-items-center">
+                                <span id="editStudentPhone" class="text-secondary me-3">138****8888</span>
+                                <a href="#" class="text-decoration-none text-primary me-3" onclick="togglePhoneEdit()">修改手机</a>
+                                <a href="#" class="text-decoration-none text-success" onclick="unbindPhone()">解除绑定</a>
+                            </div>
+                            <div id="phoneEditRow" class="mt-2" style="display: none;">
+                                <div class="input-group" style="max-width: 300px;">
+                                    <input type="tel" class="form-control" id="phoneInput" placeholder="输入新手机号">
+                                    <button class="btn btn-outline-primary" type="button" onclick="confirmPhoneEdit()">确定</button>
+                                    <button class="btn btn-outline-secondary" type="button" onclick="cancelPhoneEdit()">取消</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -726,7 +759,7 @@
 
 <!-- Scripts -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script src="js/data.js?v=2"></script>
-<script src="js/admin.js?v=2"></script>
+<script src="js/data.js?v=3"></script>
+<script src="js/admin.js?v=3"></script>
 </body>
 </html>

@@ -314,9 +314,15 @@ function renderStudents() {
 
     tbody.innerHTML = filtered.map(stu => `
         <tr>
+            <td>
+                <img src="${stu.avatar || DEFAULT_AVATAR}" class="rounded-circle border" width="32" height="32" style="object-fit: cover;">
+            </td>
             <td>${stu.username}</td>
             <td>${stu.name}</td>
+            <td>${getGenderLabel(stu.gender)}</td>
             <td>${getClassName(stu.classId)}</td>
+            <td>${stu.phone || '-'}</td>
+            <td>${getRegionLabel(stu.region)}</td>
             <td>
                 <button class="btn btn-sm btn-outline-primary" onclick="openStudentModal('${stu.id}')">编辑</button>
                 <button class="btn btn-sm btn-outline-danger" onclick="deleteUser('${stu.id}')">删除</button>
@@ -326,6 +332,13 @@ function renderStudents() {
 }
 
 function openStudentModal(id = null) {
+    if (id) {
+        // 编辑模式：切换到新的个人中心风格页面
+        switchToStudentEdit(id);
+        return;
+    }
+
+    // 新增模式：继续使用 Modal
     const form = document.getElementById('studentForm');
     form.reset();
     document.getElementById('studentId').value = '';
@@ -334,19 +347,189 @@ function openStudentModal(id = null) {
     const classSelect = form.elements['classId'];
     classSelect.innerHTML = currentClasses.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
 
-    if (id) {
-        const stu = currentUsers.find(u => u.id === id);
-        if (stu) {
-            document.getElementById('studentId').value = stu.id;
-            form.elements['username'].value = stu.username;
-            form.elements['name'].value = stu.name;
-            form.elements['classId'].value = stu.classId;
-            document.getElementById('studentModalLabel').textContent = '编辑学生';
-        }
-    } else {
-        document.getElementById('studentModalLabel').textContent = '新增学生';
-    }
+    document.getElementById('studentModalLabel').textContent = '新增学生';
     studentModal.show();
+}
+
+function switchToStudentEdit(id) {
+    const stu = currentUsers.find(u => u.id === id);
+    if (!stu) return;
+
+    // 1. 隐藏所有 section，显示编辑 section
+    document.querySelectorAll('.content-section').forEach(section => {
+        section.style.display = 'none';
+    });
+    document.getElementById('student-edit-section').style.display = 'block';
+
+    // 2. 填充数据
+    document.getElementById('editStudentId').value = stu.id;
+    document.getElementById('editStudentUsername').value = stu.username; // 昵称/学号
+    document.getElementById('editStudentName').value = stu.name;
+    
+    // 填充班级下拉框
+    const classSelect = document.getElementById('editStudentClassId');
+    classSelect.innerHTML = currentClasses.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    classSelect.value = stu.classId;
+
+    // 性别 (假设数据中有 gender 字段，如果没有默认为 male)
+    const gender = stu.gender || 'male';
+    const genderRadio = document.querySelector(`input[name="gender"][value="${gender}"]`);
+    if (genderRadio) genderRadio.checked = true;
+
+    // 邮箱 (显示)
+    const emailDisplay = document.getElementById('editStudentEmail');
+    if (emailDisplay) emailDisplay.textContent = stu.email || '未绑定邮箱';
+
+    // 手机 (显示)
+    const phoneDisplay = document.getElementById('editStudentPhone');
+    if (phoneDisplay) phoneDisplay.textContent = stu.phone || '未绑定手机';
+
+    // 生日
+    const birthdayInput = document.querySelector('#student-edit-section input[type="date"]');
+    if (birthdayInput) birthdayInput.value = stu.birthday || '';
+
+    // 地区
+    const regionSelect = document.querySelector('#student-edit-section select:not(#editStudentClassId)');
+    if (regionSelect) regionSelect.value = stu.region || '';
+    
+    // 头像
+    const avatarImg = document.getElementById('editStudentAvatar');
+    // 如果没有头像，使用默认的 SVG
+    avatarImg.src = stu.avatar || DEFAULT_AVATAR;
+
+    // 确保内联编辑框是隐藏的
+    document.getElementById('emailEditRow').style.display = 'none';
+    document.getElementById('phoneEditRow').style.display = 'none';
+}
+
+// --- 头像处理逻辑 ---
+function triggerAvatarUpload() {
+    document.getElementById('avatarInput').click();
+}
+
+function handleAvatarChange(input) {
+    if (input.files && input.files[0]) {
+        const file = input.files[0];
+        
+        // 限制大小 (例如 2MB)
+        if (file.size > 2 * 1024 * 1024) {
+            alert('图片大小不能超过 2MB');
+            input.value = '';
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('editStudentAvatar').src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+// --- 邮箱编辑逻辑 ---
+function toggleEmailEdit() {
+    const row = document.getElementById('emailEditRow');
+    const input = document.getElementById('emailInput');
+    const current = document.getElementById('editStudentEmail').textContent;
+    
+    if (row.style.display === 'none') {
+        row.style.display = 'block';
+        input.value = current === '未绑定邮箱' ? '' : current;
+        input.focus();
+    } else {
+        row.style.display = 'none';
+    }
+}
+
+function confirmEmailEdit() {
+    const newVal = document.getElementById('emailInput').value.trim();
+    document.getElementById('editStudentEmail').textContent = newVal || '未绑定邮箱';
+    document.getElementById('emailEditRow').style.display = 'none';
+}
+
+function cancelEmailEdit() {
+    document.getElementById('emailEditRow').style.display = 'none';
+}
+
+// --- 手机编辑逻辑 ---
+function togglePhoneEdit() {
+    const row = document.getElementById('phoneEditRow');
+    const input = document.getElementById('phoneInput');
+    const current = document.getElementById('editStudentPhone').textContent;
+    
+    if (row.style.display === 'none') {
+        row.style.display = 'block';
+        input.value = current === '未绑定手机' ? '' : current;
+        input.focus();
+    } else {
+        row.style.display = 'none';
+    }
+}
+
+function confirmPhoneEdit() {
+    const newVal = document.getElementById('phoneInput').value.trim();
+    document.getElementById('editStudentPhone').textContent = newVal || '未绑定手机';
+    document.getElementById('phoneEditRow').style.display = 'none';
+}
+
+function cancelPhoneEdit() {
+    document.getElementById('phoneEditRow').style.display = 'none';
+}
+
+function unbindPhone() {
+    if(confirm('确定要解除手机绑定吗？')) {
+        document.getElementById('editStudentPhone').textContent = '未绑定手机';
+    }
+}
+
+function cancelEdit() {
+    // 返回学生列表
+    document.getElementById('student-edit-section').style.display = 'none';
+    document.getElementById('student-section').style.display = 'block';
+    // 隐藏所有内联编辑框
+    document.getElementById('emailEditRow').style.display = 'none';
+    document.getElementById('phoneEditRow').style.display = 'none';
+}
+
+async function saveStudentProfile() {
+    const id = document.getElementById('editStudentId').value;
+    const username = document.getElementById('editStudentUsername').value;
+    const classId = document.getElementById('editStudentClassId').value;
+    const gender = document.querySelector('input[name="gender"]:checked').value;
+    
+    // 获取新增字段
+    const birthday = document.querySelector('#student-edit-section input[type="date"]').value;
+    const region = document.querySelector('#student-edit-section select:not(#editStudentClassId)').value;
+    const avatar = document.getElementById('editStudentAvatar').src;
+    
+    // 获取邮箱和手机 (从 span 中读取)
+    const emailText = document.getElementById('editStudentEmail').textContent;
+    const phoneText = document.getElementById('editStudentPhone').textContent;
+    const email = emailText === '未绑定邮箱' ? '' : emailText;
+    const phone = phoneText === '未绑定手机' ? '' : phoneText;
+
+    if (!username) return alert('请输入昵称/学号');
+
+    // 查找原用户对象以保留其他字段
+    const originalUser = currentUsers.find(u => u.id === id);
+    if (!originalUser) return;
+
+    const updatedUser = {
+        ...originalUser,
+        username: username,
+        classId: classId,
+        gender: gender,
+        birthday: birthday,
+        region: region,
+        email: email,
+        phone: phone,
+        avatar: avatar
+    };
+
+    await db.put(STORAGE_KEYS.USERS, updatedUser);
+    alert('保存成功');
+    cancelEdit(); // 返回列表
+    loadAllData(); // 刷新数据
 }
 
 async function saveStudent() {
@@ -718,6 +901,22 @@ function getUserName(id, field = 'name') {
     return currentUsers.find(u => u.id === id)?.[field] || '未知用户';
 }
 
+function getGenderLabel(gender) {
+    const map = { 'male': '男', 'female': '女', 'secret': '保密' };
+    return map[gender] || '-';
+}
+
+function getRegionLabel(region) {
+    const map = {
+        'beijing': '北京',
+        'shanghai': '上海',
+        'guangdong': '广东',
+        'zhejiang': '浙江',
+        'jiangsu': '江苏'
+    };
+    return map[region] || region || '-';
+}
+
 // 显式暴露给全局作用域 (防止某些环境下的作用域问题)
 window.handleSort = handleSort;
 window.exportAllScores = exportAllScores;
@@ -739,5 +938,17 @@ window.deletePlan = deletePlan;
 window.savePlan = savePlan;
 window.viewScoreDetails = viewScoreDetails;
 window.publishScore = publishScore;
+window.switchToStudentEdit = switchToStudentEdit;
+window.cancelEdit = cancelEdit;
+window.saveStudentProfile = saveStudentProfile;
+window.toggleEmailEdit = toggleEmailEdit;
+window.confirmEmailEdit = confirmEmailEdit;
+window.cancelEmailEdit = cancelEmailEdit;
+window.togglePhoneEdit = togglePhoneEdit;
+window.confirmPhoneEdit = confirmPhoneEdit;
+window.cancelPhoneEdit = cancelPhoneEdit;
+window.unbindPhone = unbindPhone;
+window.triggerAvatarUpload = triggerAvatarUpload;
+window.handleAvatarChange = handleAvatarChange;
 
 console.log('Admin script loaded successfully.');
