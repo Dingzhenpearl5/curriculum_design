@@ -17,7 +17,7 @@ let sortState = {
 };
 
 // Bootstrap Modal 实例
-let classModal, courseModal, planModal, scoreDetailModal, studentModal, teacherModal;
+let classModal, courseModal, planModal, scoreDetailModal, studentModal, teacherModal, classStudentsModal;
 
 document.addEventListener('DOMContentLoaded', () => {
     // 初始化 Modals
@@ -27,6 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
     scoreDetailModal = new bootstrap.Modal(document.getElementById('scoreDetailModal'));
     studentModal = new bootstrap.Modal(document.getElementById('studentModal'));
     teacherModal = new bootstrap.Modal(document.getElementById('teacherModal'));
+    classStudentsModal = new bootstrap.Modal(document.getElementById('classStudentsModal'));
 
     // 绑定导航事件 (Navbar & Dashboard Cards)
     const handleNavigation = (targetId) => {
@@ -222,7 +223,11 @@ function renderClasses() {
         return `
         <tr>
             <td>${cls.id}</td>
-            <td>${cls.name}</td>
+            <td>
+                <a href="#" onclick="event.preventDefault(); viewClassStudents('${cls.id}')" class="text-decoration-none fw-bold" title="点击查看班级学生">
+                    ${cls.name}
+                </a>
+            </td>
             <td><span class="badge bg-info text-dark">${studentCount} 人</span></td>
             <td>
                 <button class="btn btn-sm btn-outline-primary" onclick="openClassModal('${cls.id}')">编辑</button>
@@ -272,6 +277,32 @@ async function deleteClass(id) {
         await db.delete(STORAGE_KEYS.CLASSES, id);
         loadAllData();
     }
+}
+
+function viewClassStudents(classId) {
+    const cls = currentClasses.find(c => c.id === classId);
+    if (!cls) return;
+
+    const students = currentUsers.filter(u => u.role === 'student' && u.classId === classId);
+    
+    document.getElementById('classStudentsModalLabel').textContent = `${cls.name} - 学生列表 (${students.length}人)`;
+    
+    const tbody = document.querySelector('#class-students-table tbody');
+    if (students.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center py-3 text-muted">该班级暂无学生</td></tr>';
+    } else {
+        tbody.innerHTML = students.map(s => `
+            <tr>
+                <td>${s.username}</td>
+                <td>${s.name}</td>
+                <td>${getGenderLabel(s.gender)}</td>
+                <td>${getRegionLabel(s.region)}</td>
+                <td>${s.phone || '-'}</td>
+            </tr>
+        `).join('');
+    }
+    
+    classStudentsModal.show();
 }
 
 // ==========================================
@@ -817,13 +848,15 @@ function updatePlanFilterOptions() {
     const updateScheduleOptions = (select) => {
         if (!select) return;
         const currentVal = select.value;
-        select.innerHTML = semesters.map(s => `<option value="${s}">${s}</option>`).join('');
+        select.innerHTML = '<option value="">所有学期</option>' + semesters.map(s => `<option value="${s}">${s}</option>`).join('');
         
         // 如果当前值有效则保持，否则选中第一个
         if (currentVal && semesters.includes(currentVal)) {
             select.value = currentVal;
-        } else if (semesters.length > 0) {
-            select.value = semesters[0];
+        } else if (currentVal === '') {
+            select.value = '';
+        } else {
+            select.value = ''; // 默认选中 "所有学期"
         }
     };
 
@@ -1119,13 +1152,14 @@ function renderSchedule() {
     
     const updateSelect = (select, options) => {
         const currentVal = select.value;
-        select.innerHTML = options.map(s => `<option value="${s}">${s}</option>`).join('');
+        // 增加 "所有学期" 选项
+        select.innerHTML = '<option value="">所有学期</option>' + options.map(s => `<option value="${s}">${s}</option>`).join('');
         
-        // 如果当前选中的值仍在列表中，保持选中；否则选中第一个
+        // 如果当前选中的值仍在列表中，保持选中；否则选中第一个(所有学期)
         if (currentVal && options.includes(currentVal)) {
             select.value = currentVal;
-        } else if (options.length > 0) {
-            select.value = options[0];
+        } else {
+            select.value = ''; // 默认选中 "所有学期"
         }
     };
 
@@ -1161,7 +1195,11 @@ function renderOverallSchedule() {
     const tbody = document.querySelector('#overall-schedule-table tbody');
     if (!tbody) return;
 
-    renderScheduleGrid(tbody, currentPlans.filter(p => p.semester === semester));
+    let plans = currentPlans;
+    if (semester) {
+        plans = plans.filter(p => p.semester === semester);
+    }
+    renderScheduleGrid(tbody, plans, !semester);
 }
 
 function renderTeacherSchedule() {
@@ -1177,11 +1215,14 @@ function renderTeacherSchedule() {
     }
 
     title.textContent = `${getUserName(teacherId)} - 课表预览`;
-    const plans = currentPlans.filter(p => p.semester === semester && p.teacherId === teacherId);
-    renderScheduleGrid(tbody, plans);
+    let plans = currentPlans.filter(p => p.teacherId === teacherId);
+    if (semester) {
+        plans = plans.filter(p => p.semester === semester);
+    }
+    renderScheduleGrid(tbody, plans, !semester);
 }
 
-function renderScheduleGrid(tbody, plans) {
+function renderScheduleGrid(tbody, plans, showSemester = false) {
     const days = ['周一', '周二', '周三', '周四', '周五'];
     const slots = [1, 2, 3, 4, 5, 6, 7, 8]; // 8节课
     
@@ -1234,6 +1275,7 @@ function renderScheduleGrid(tbody, plans) {
                                 <div class="fw-bold small">${getCourseName(p.courseId)}</div>
                                 <div class="small">${getUserName(p.teacherId)}</div>
                                 <div class="small badge bg-secondary bg-opacity-10 text-dark">@${p.classroom}</div>
+                                ${showSemester ? `<div class="small text-muted scale-08 mt-1">${p.semester}</div>` : ''}
                             </div>
                         `).join('');
                         
@@ -1386,6 +1428,7 @@ window.exportAllScores = exportAllScores;
 window.logout = logout;
 window.handleStudentSearch = handleStudentSearch;
 window.openClassModal = openClassModal;
+window.viewClassStudents = viewClassStudents;
 window.deleteClass = deleteClass;
 window.saveClass = saveClass;
 window.openStudentModal = openStudentModal;
