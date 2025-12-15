@@ -138,6 +138,13 @@ function exportAllScores() {
         ]);
     });
 
+    // 按学号排序 (index 2)
+    rows.sort((a, b) => {
+        const idA = a[2] || '';
+        const idB = b[2] || '';
+        return idA.localeCompare(idB);
+    });
+
     let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; // 添加 BOM 防止乱码
     csvContent += headers.join(",") + "\r\n";
     rows.forEach(row => {
