@@ -1,0 +1,21 @@
+# Dependency directories
+node_modules/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Archives
+*.rar
+*.zip
+*.7z
+*.tar.gz
+
+# Logs
+*.log
